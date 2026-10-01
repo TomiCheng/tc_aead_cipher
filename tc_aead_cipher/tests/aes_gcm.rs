@@ -4,7 +4,8 @@ use tc_block_cipher::CipherDirection;
 
 #[test]
 fn aes_gcm_authenticates_a_multiblock_message_and_rejects_a_modified_tag() {
-    // 固定 nonce 僅供測試；正式使用時，同一把 key 的每次加密必須使用不同 nonce。
+    // A fixed nonce is for tests only: every encryption under one key needs a
+    // fresh nonce.
     let key = [0x42; 32];
     let nonce = [0x24; 12];
     let aad = b"content-type: application/octet-stream";
@@ -28,7 +29,8 @@ fn aes_gcm_authenticates_a_multiblock_message_and_rejects_a_modified_tag() {
         .process_bytes(&ciphertext, &mut recovered)
         .unwrap();
     let written = written + decryptor.do_final(&mut recovered[written..]).unwrap();
-    // 只有 do_final 成功後，才能將解密輸出當成已驗證的明文使用。
+    // Decrypted output counts as authenticated plaintext only once do_final
+    // succeeds.
     assert_eq!(written, plaintext.len());
     assert_eq!(recovered.as_slice(), plaintext);
 
@@ -42,7 +44,8 @@ fn aes_gcm_authenticates_a_multiblock_message_and_rejects_a_modified_tag() {
         decryptor.do_final(&mut unauthenticated[written..]),
         Err(AeadError::AuthenticationFailed)
     );
-    // process_bytes 可能已輸出部分明文；驗證失敗時整份輸出都必須丟棄。
+    // process_bytes may already have written some plaintext; when the tag check
+    // fails, all of it must be discarded.
     drop(unauthenticated);
     assert_eq!(decryptor.mac(), None);
 }
