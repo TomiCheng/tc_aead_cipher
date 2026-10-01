@@ -95,7 +95,8 @@ enum State {
 ///
 /// This family is retained for compatibility with pre-standard Ascon-128,
 /// Ascon-128a, and Ascon-80pq. New protocols should use
-/// [`crate::aead128::Engine`].
+/// [`AsconAead128Engine`](crate::AsconAead128Engine), the NIST SP 800-232
+/// standard.
 ///
 /// Decryption may emit unauthenticated plaintext before
 /// [`AeadCipher::do_final`] verifies the tag. Callers must not release that
