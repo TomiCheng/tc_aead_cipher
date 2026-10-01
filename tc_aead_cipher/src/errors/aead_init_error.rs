@@ -11,17 +11,37 @@ use core::fmt::Display;
 #[non_exhaustive]
 pub enum AeadInitError<E = Infallible> {
     /// The key length is unsupported by a construction that keys itself.
-    InvalidKeyLength { actual: usize },
+    InvalidKeyLength {
+        /// The key length that was supplied, in bytes.
+        actual: usize,
+    },
     /// The underlying block cipher's block size is unsupported by the construction.
-    InvalidBlockSize { actual: usize, required: usize },
+    InvalidBlockSize {
+        /// The underlying cipher's block size, in bytes.
+        actual: usize,
+        /// A block size the construction accepts, in bytes.
+        required: usize,
+    },
     /// The nonce length is outside the range supported by the construction.
-    InvalidNonceLength { actual: usize },
+    InvalidNonceLength {
+        /// The nonce length that was supplied, in bytes.
+        actual: usize,
+    },
     /// The initial associated data is longer than the construction can count.
-    InvalidInitialAadLength { actual: usize },
+    InvalidInitialAadLength {
+        /// The initial associated data length that was supplied, in bytes.
+        actual: usize,
+    },
     /// The requested authentication-tag size is unsupported.
-    InvalidMacSize { actual: usize },
+    InvalidMacSize {
+        /// The tag size that was requested, in bytes.
+        actual: usize,
+    },
     /// The requested counter-length parameter is unsupported.
-    InvalidCounterSize { actual: usize },
+    InvalidCounterSize {
+        /// The counter-length parameter that was requested.
+        actual: usize,
+    },
     /// The same key and nonce would be reused for encryption.
     NonceReuse,
     /// A composed primitive failed despite validated internal invariants.

@@ -15,19 +15,39 @@ pub enum AeadError<E = Infallible> {
     /// Associated data was supplied after message processing started.
     AadAfterData,
     /// Associated data exceeds the engine's fixed buffer capacity.
-    AadTooLong { maximum: usize, actual: usize },
+    AadTooLong {
+        /// The most associated data the engine can hold, in bytes.
+        maximum: usize,
+        /// The length the associated data would have reached, in bytes.
+        actual: usize,
+    },
     /// The current operation has already been finalized.
     AlreadyFinalized,
     /// The output buffer is shorter than required.
-    OutputTooShort { required: usize, available: usize },
+    OutputTooShort {
+        /// The output length the call needs, in bytes.
+        required: usize,
+        /// The length of the output buffer that was supplied, in bytes.
+        available: usize,
+    },
     /// The ciphertext does not contain a complete authentication tag.
-    CiphertextTooShort { minimum: usize, actual: usize },
+    CiphertextTooShort {
+        /// The shortest valid ciphertext, the tag alone, in bytes.
+        minimum: usize,
+        /// The ciphertext length that was supplied, in bytes.
+        actual: usize,
+    },
     /// Authentication-tag verification failed.
     AuthenticationFailed,
     /// The algorithm's input-length limit would be exceeded.
     InputTooLong,
     /// The complete packet length is not a multiple of the required block size.
-    InputNotBlockAligned { block_size: usize, actual: usize },
+    InputNotBlockAligned {
+        /// The block size the length must be a multiple of, in bytes.
+        block_size: usize,
+        /// The length that was supplied, in bytes.
+        actual: usize,
+    },
     /// A composed primitive failed despite validated internal invariants.
     InternalFailure,
     /// A failure reported by the underlying cipher.

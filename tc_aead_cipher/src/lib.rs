@@ -1,6 +1,7 @@
 //! Authenticated encryption with associated data (AEAD) contracts.
 
 #![no_std]
+#![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
