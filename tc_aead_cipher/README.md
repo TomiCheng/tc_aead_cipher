@@ -90,9 +90,9 @@ The type documentation carries an executable example for every mode.
 ## Security
 
 Never encrypt two messages under one key and nonce, except with GCM-SIV,
-which then reveals only whether the messages were equal. The other modes
-refuse an encryption `init` that repeats the previous key and nonce of the
-same instance, but nothing tracks nonces across instances or restarts. GCM
+which then reveals only whether the messages were equal. The other modes,
+like the engines of the algorithm crates, refuse an encryption `init` that
+repeats the previous key and nonce of the same instance, but nothing tracks nonces across instances or restarts. GCM
 and EAX may write plaintext from `process_bytes` before `do_final` verifies
 the tag; discard all of it when `do_final` fails.
 

@@ -47,10 +47,11 @@ Engines that wrap a block cipher are named `XxxBlockCipher`, as in
 `XxxEngine`, as in `tc_aes`, and their crates `tc_<algorithm>_aead`. Parameter
 types only carry values; each engine validates them in `init`. A failed
 `init` leaves the engine uninitialized, and `mac()` returns the transmitted
-tag. Tag sizes are in bytes. The modes other than GCM-SIV refuse an encryption
-`init` that repeats the previous key and nonce by comparing a key-derived value
-in fixed time, never a copy of the key; the algorithm crates do not detect
-reuse.
+tag. Tag sizes are in bytes. Every engine but GCM-SIV, which tolerates nonce
+reuse, refuses an encryption `init` that repeats the previous key and nonce:
+the modes compare a key-derived value in fixed time, never a copy of the key,
+and the algorithm engines compare the key they already hold, also in fixed
+time. A failed `init` keeps the previous key and nonce for the check.
 
 The six modes are constant time exactly when their cipher is. The Ascon,
 Grain-128AEAD and SCHWAEMM engines are constant time, the SSE2 form of SPARKLE

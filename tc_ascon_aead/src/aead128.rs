@@ -2,7 +2,7 @@
 
 use core::fmt::{Display, Formatter};
 use tc_block_cipher::{CipherDirection, KeyParams};
-use tc_constant_time::fixed_time_eq;
+use tc_constant_time::{ConstantTimeEq, fixed_time_eq};
 use tc_zeroize::Zeroize;
 
 use tc_aead_cipher::{
@@ -46,6 +46,10 @@ enum State {
 /// Plaintext emitted before successful finalization is unauthenticated and must
 /// not be released to consumers.
 ///
+/// Encryption refuses an `init` whose key and nonce match the previous `init`
+/// of the same instance. Nothing tracks nonces across instances or restarts,
+/// so the caller must still never reuse a nonce under one key.
+///
 /// Constant time: the permutation is a bitsliced S-box and linear layer on
 /// 64-bit words, without tables or data-dependent branches, and the tag is
 /// compared in fixed time. Only public lengths decide how much work is done.
@@ -79,6 +83,7 @@ pub struct AsconAead128Engine {
     buffer_pos: usize,
     key: [u64; 2],
     nonce: [u64; 2],
+    has_key_nonce: bool,
     state_words: [u64; 5],
     state: State,
     mac: Option<[u8; TAG_BYTES]>,
@@ -97,6 +102,7 @@ impl AsconAead128Engine {
             buffer_pos: 0,
             key: [0; 2],
             nonce: [0; 2],
+            has_key_nonce: false,
             state_words: [0; 5],
             state: State::Uninitialized,
             mac: None,
@@ -589,15 +595,15 @@ where
     type Error = AeadInitError;
 
     /// Loads the key and nonce, runs the initialization and absorbs any initial
-    /// associated data. Constant time: lengths are checked against public
-    /// sizes, and the state is set up without data-dependent branches.
+    /// associated data. Encryption refuses a key and nonce that repeat the
+    /// previous `init` of this engine. Constant time: lengths are checked
+    /// against public sizes, the key is compared in fixed time, and the state
+    /// is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;
         self.buffer.zeroize();
         self.buffer_pos = 0;
-        self.key.zeroize();
-        self.nonce.zeroize();
         self.state_words.zeroize();
         self.initial_buffer.zeroize();
         self.initial_buffer_pos = 0;
@@ -618,12 +624,24 @@ where
         if !(MIN_TAG_BYTES..=TAG_BYTES).contains(&mac_size) {
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
-        self.mac_size = mac_size;
 
-        self.key[0] = load_u64(&key[..8]);
-        self.key[1] = load_u64(&key[8..]);
-        self.nonce[0] = load_u64(&nonce[..8]);
-        self.nonce[1] = load_u64(&nonce[8..]);
+        let mut new_key = [load_u64(&key[..8]), load_u64(&key[8..])];
+        let new_nonce = [load_u64(&nonce[..8]), load_u64(&nonce[8..])];
+        // Reuse means the same key and nonce. The nonce is public, so only the
+        // key needs a fixed-time comparison.
+        let reused = self.has_key_nonce
+            && self.nonce == new_nonce
+            && self.key.ct_eq(&new_key).unwrap_u8() == 1;
+        if direction == CipherDirection::Encrypt && reused {
+            new_key.zeroize();
+            return Err(AeadInitError::NonceReuse);
+        }
+
+        self.mac_size = mac_size;
+        self.key = new_key;
+        new_key.zeroize();
+        self.nonce = new_nonce;
+        self.has_key_nonce = true;
         self.state = match direction {
             CipherDirection::Encrypt => State::EncryptInit,
             CipherDirection::Decrypt => State::DecryptInit,
@@ -682,8 +700,10 @@ mod tests {
                 );
             }
 
+            // A tag size alone does not make a nonce fresh, so each init takes its own.
             for mac_size in [4, 8, 12, 16] {
-                let params = AeadParamsRef::new(&bytes[..16], &bytes[..16], mac_size, &[]);
+                let nonce = [mac_size as u8; 16];
+                let params = AeadParamsRef::new(&bytes[..16], &nonce, mac_size, &[]);
                 assert_eq!(engine.init(direction, &params), Ok(()));
             }
         }

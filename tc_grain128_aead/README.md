@@ -63,8 +63,9 @@ The type documentation carries an executable example for both engines.
 
 ## Security
 
-Never encrypt two messages under one key and nonce. These engines do not
-detect a repeated nonce, so the caller must guarantee it. Decryption may
+Never encrypt two messages under one key and nonce. Encryption refuses an
+`init` that repeats the previous key and nonce of the same instance, but
+nothing tracks nonces across instances or restarts. Decryption may
 write plaintext before `do_final` verifies the tag; discard all of it when
 `do_final` fails. The 8-byte tag gives at most 64-bit forgery resistance.
 
@@ -84,7 +85,7 @@ on the stack.
 Both engines are tested against the official and Bouncy Castle Grain-128AEAD
 vectors. Contract tests cover associated data and messages split across
 calls, initial associated data, the fixed engine's capacity, the tag size,
-`reset`, tampering and size errors. A test requires every public API to
+`reset`, nonce-reuse detection, tampering and size errors. A test requires every public API to
 document whether it is constant or variable time.
 
 Missing public documentation and `unsafe` code are rejected by crate-level

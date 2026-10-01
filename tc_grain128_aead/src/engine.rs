@@ -124,6 +124,7 @@ impl<const MAX_AAD_LEN: usize> AadBuffer for FixedAadBuffer<MAX_AAD_LEN> {
 struct Inner<B> {
     key: [u8; KEY_BYTES],
     nonce: [u8; NONCE_BYTES],
+    has_key_nonce: bool,
     lfsr: [u32; 4],
     nfsr: [u32; 4],
     auth: [u32; 4],
@@ -140,6 +141,7 @@ impl<B: AadBuffer> Inner<B> {
         Self {
             key: [0; KEY_BYTES],
             nonce: [0; NONCE_BYTES],
+            has_key_nonce: false,
             lfsr: [0; 4],
             nfsr: [0; 4],
             auth: [0; 4],
@@ -623,13 +625,13 @@ where
     type Error = AeadInitError;
 
     /// Loads the key and nonce, runs the initialization and absorbs any initial
-    /// associated data. Constant time: lengths are checked against public
-    /// sizes, and the state is set up without data-dependent branches.
+    /// associated data. Encryption refuses a key and nonce that repeat the
+    /// previous `init` of this engine. Constant time: lengths are checked
+    /// against public sizes, the key is compared in fixed time, and the state
+    /// is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;
-        self.key.zeroize();
-        self.nonce.zeroize();
         self.lfsr.zeroize();
         self.nfsr.zeroize();
         self.auth.zeroize();
@@ -652,6 +654,13 @@ where
         if mac_size != TAG_BYTES {
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
+        // Reuse means the same key and nonce. The nonce is public, so only the
+        // key needs a fixed-time comparison.
+        let reused =
+            self.has_key_nonce && self.nonce[..] == *nonce && fixed_time_eq(&self.key, key);
+        if direction == CipherDirection::Encrypt && reused {
+            return Err(AeadInitError::NonceReuse);
+        }
         let initial_aad = params.initial_aad();
         self.initial_aad_buffer
             .extend_from_slice(initial_aad)
@@ -662,6 +671,7 @@ where
 
         self.key.copy_from_slice(key);
         self.nonce.copy_from_slice(nonce);
+        self.has_key_nonce = true;
         self.lfsr.zeroize();
         self.nfsr.zeroize();
         self.auth.zeroize();
@@ -687,6 +697,10 @@ where
 ///
 /// This type is available with the `alloc` feature and accepts AAD of
 /// any length supported by the allocator.
+///
+/// Encryption refuses an `init` whose key and nonce match the previous `init`
+/// of the same instance. Nothing tracks nonces across instances or restarts,
+/// so the caller must still never reuse a nonce under one key.
 ///
 /// Constant time: the shift registers and the authentication accumulator are
 /// updated with shifts and masks, never with branches on key, nonce or message
@@ -825,8 +839,10 @@ where
     type Error = AeadInitError;
 
     /// Loads the key and nonce, runs the initialization and absorbs any initial
-    /// associated data. Constant time: lengths are checked against public
-    /// sizes, and the state is set up without data-dependent branches.
+    /// associated data. Encryption refuses a key and nonce that repeat the
+    /// previous `init` of this engine. Constant time: lengths are checked
+    /// against public sizes, the key is compared in fixed time, and the state
+    /// is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.inner.init(direction, params)
     }
@@ -836,6 +852,10 @@ where
 ///
 /// `MAX_AAD_LEN` is the maximum amount of AAD that can be buffered for one
 /// operation. It is a capacity, not the exact AAD length.
+///
+/// Encryption refuses an `init` whose key and nonce match the previous `init`
+/// of the same instance. Nothing tracks nonces across instances or restarts,
+/// so the caller must still never reuse a nonce under one key.
 ///
 /// Constant time: the shift registers and the authentication accumulator are
 /// updated with shifts and masks, never with branches on key, nonce or message
@@ -967,8 +987,10 @@ where
     type Error = AeadInitError;
 
     /// Loads the key and nonce, runs the initialization and absorbs any initial
-    /// associated data. Constant time: lengths are checked against public
-    /// sizes, and the state is set up without data-dependent branches.
+    /// associated data. Encryption refuses a key and nonce that repeat the
+    /// previous `init` of this engine. Constant time: lengths are checked
+    /// against public sizes, the key is compared in fixed time, and the state
+    /// is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.inner.init(direction, params)
     }

@@ -416,7 +416,11 @@ fn the_metadata_and_state_rules_are_reported_and_enforced() {
         assert_eq!(engine.update_output_len(0).unwrap(), 0);
         assert_eq!(engine.process_bytes(&[], &mut []), Ok(0));
 
-        engine.init(CipherDirection::Encrypt, &params).unwrap();
+        // A second encryption under the same key needs a fresh nonce.
+        let mut fresh_nonce = nonce.clone();
+        fresh_nonce[0] ^= 1;
+        let fresh = AeadParamsRef::new(&key, &fresh_nonce, variant.tag_bytes(), &[]);
+        engine.init(CipherDirection::Encrypt, &fresh).unwrap();
         engine.process_bytes(&[], &mut []).unwrap();
         assert_eq!(engine.process_aad_bytes(&[0]), Err(AeadError::AadAfterData));
         let mut tag = [0_u8; 32];

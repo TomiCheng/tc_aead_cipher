@@ -3,7 +3,7 @@
 use core::fmt::{Display, Formatter};
 
 use tc_block_cipher::{CipherDirection, KeyParams};
-use tc_constant_time::fixed_time_eq;
+use tc_constant_time::{ConstantTimeEq, fixed_time_eq};
 use tc_zeroize::Zeroize;
 
 use crate::variant::{BYTES_256, SparkleVariant};
@@ -48,6 +48,10 @@ enum State {
 /// [`AeadCipher::do_final`] verifies the tag. Callers must not release that
 /// plaintext before finalization succeeds.
 ///
+/// Encryption refuses an `init` whose key and nonce match the previous `init`
+/// of the same instance. Nothing tracks nonces across instances or restarts,
+/// so the caller must still never reuse a nonce under one key.
+///
 /// Constant time: SPARKLE is an ARX permutation of additions, rotations and
 /// XORs on 32-bit words, its SSE2 form on x86 does the same work, and the tag
 /// is compared in fixed time. Only public lengths decide how much work is done.
@@ -82,6 +86,7 @@ pub struct SparkleEngine {
     buffer_pos: usize,
     key: [u32; MAX_KEY_WORDS],
     nonce: [u32; MAX_KEY_WORDS],
+    has_key_nonce: bool,
     state_words: [u32; MAX_STATE_WORDS],
     state: State,
     encrypted: bool,
@@ -101,6 +106,7 @@ impl SparkleEngine {
             buffer_pos: 0,
             key: [0; MAX_KEY_WORDS],
             nonce: [0; MAX_KEY_WORDS],
+            has_key_nonce: false,
             state_words: [0; MAX_STATE_WORDS],
             state: State::Uninitialized,
             encrypted: false,
@@ -666,15 +672,15 @@ where
     type Error = AeadInitError;
 
     /// Loads the key and nonce, runs the initialization and absorbs any initial
-    /// associated data. Constant time: lengths are checked against public
-    /// sizes, and the state is set up without data-dependent branches.
+    /// associated data. Encryption refuses a key and nonce that repeat the
+    /// previous `init` of this engine. Constant time: lengths are checked
+    /// against public sizes, the key is compared in fixed time, and the state
+    /// is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;
         self.buffer.zeroize();
         self.buffer_pos = 0;
-        self.key.zeroize();
-        self.nonce.zeroize();
         self.state_words.zeroize();
         self.initial_buffer.zeroize();
         self.initial_buffer_pos = 0;
@@ -697,14 +703,28 @@ where
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
 
-        self.key.zeroize();
-        for (word, bytes) in self.key.iter_mut().zip(key.chunks_exact(4)) {
+        let mut new_key = [0_u32; MAX_KEY_WORDS];
+        for (word, bytes) in new_key.iter_mut().zip(key.chunks_exact(4)) {
             *word = load_u32(bytes);
         }
-        self.nonce.zeroize();
-        for (word, bytes) in self.nonce.iter_mut().zip(nonce.chunks_exact(4)) {
+        let mut new_nonce = [0_u32; MAX_KEY_WORDS];
+        for (word, bytes) in new_nonce.iter_mut().zip(nonce.chunks_exact(4)) {
             *word = load_u32(bytes);
         }
+        // Reuse means the same key and nonce. The nonce is public, so only the
+        // key needs a fixed-time comparison.
+        let reused = self.has_key_nonce
+            && self.nonce == new_nonce
+            && self.key.ct_eq(&new_key).unwrap_u8() == 1;
+        if direction == CipherDirection::Encrypt && reused {
+            new_key.zeroize();
+            return Err(AeadInitError::NonceReuse);
+        }
+
+        self.key = new_key;
+        new_key.zeroize();
+        self.nonce = new_nonce;
+        self.has_key_nonce = true;
         self.buffer.zeroize();
         self.buffer_pos = 0;
         self.encrypted = false;

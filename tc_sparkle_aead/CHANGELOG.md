@@ -13,13 +13,15 @@ Initial release.
   permutation. On x86, SCHWAEMM256-256 uses an SSE2 permutation after run-time
   detection.
 - The engine implements `AeadCipher` and `AeadCipherInit` from
-  `tc_aead_cipher`. A failed `init` leaves it uninitialized, `reset` restarts a
+  `tc_aead_cipher`. Encryption refuses an `init` that repeats the previous
+  key and nonce of the same instance, comparing the key in fixed time. A
+  failed `init` leaves it uninitialized, `reset` restarts a
   message unless encryption may already have released output, and `mac()`
   returns the tag that was appended or verified.
 - `Display` for the engine and the variant, and `const fn new`.
 - Tests against the official SCHWAEMM vectors for all four parameter sets and
   of the SSE2 permutation against the portable one; contract tests of split
-  input, initial associated data, the tag size, `reset`, tampering and size
+  input, initial associated data, the tag size, `reset`, nonce reuse, tampering and size
   errors; a test that every public API documents whether it is constant or
   variable time; and a doctest.
 
@@ -33,7 +35,6 @@ Initial release.
 - Depends on `tc_block_cipher` 0.1, `tc_constant_time` 0.1 and `tc_zeroize`
   0.1, and on x86 targets on `tc_runtime` 0.1. Has no features and needs no
   allocator.
-- The engine is constant time, the SSE2 form included; lengths are public. It
-  does not detect a repeated nonce.
+- The engine is constant time, the SSE2 form included; lengths are public.
 - The only `unsafe` code is the SSE2 permutation, used after run-time
   detection.

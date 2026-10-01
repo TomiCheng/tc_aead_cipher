@@ -61,9 +61,10 @@ The type documentation carries an executable example.
 
 ## Security
 
-Never encrypt two messages under one key and nonce. The engine does not
-detect a repeated nonce, so the caller must guarantee it. Decryption may write
-plaintext before `do_final` verifies the tag; discard all of it when
+Never encrypt two messages under one key and nonce. Encryption refuses an
+`init` that repeats the previous key and nonce of the same instance, but
+nothing tracks nonces across instances or restarts. Decryption may
+write plaintext before `do_final` verifies the tag; discard all of it when
 `do_final` fails.
 
 The engine is constant time: SPARKLE adds, rotates and XORs 32-bit words, its
@@ -81,7 +82,7 @@ All four parameter sets are tested against the official SCHWAEMM
 known-answer vectors, and the SSE2 permutation against the portable one. CI
 also runs the tests on x86 with SSE2 detection disabled. Contract tests cover
 associated data and messages split across calls, initial associated data, the
-tag size, `reset`, tampering and size errors. A test requires every public
+tag size, `reset`, nonce-reuse detection, tampering and size errors. A test requires every public
 API to document whether it is constant or variable time.
 
 Missing public documentation is rejected by a crate-level lint, as is
