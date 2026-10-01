@@ -23,44 +23,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   so its results may use tables.
 
 The crate list and workspace-wide checks live in the root
-[README.md](README.md); read it rather than restating it here. Every crate is
-`no_std` and needs no allocator by default. Features are default-off and
-additive: `alloc` on `tc_block_cipher`, `tc_block_modes` and `tc_rc_cipher`,
-`rustcrypto` on `tc_aes`, `tc_des`, `tc_aria` and `tc_rc_cipher`, and
-`rand_core` on `tc_block_padding`.
-`tc_block_cipher` depends on `tc_zeroize` alone; `tc_aes` adds
-`tc_block_cipher` and, on x86 targets only, `tc_runtime`; `tc_des`, `tc_aria`,
-`tc_rc_cipher`, `tc_dstu7624` and `tc_block_modes` add `tc_block_cipher` on
-every target; `tc_block_padding`
-depends on nothing by default. CI enforces each
-crate's default dependency set with `cargo tree` on the
-`wasm32-unknown-unknown`, `aarch64-unknown-none` and x86 targets.
-`tc_block_cipher` carries no algorithm knowledge: key lengths,
-round counts, S-boxes and timing guarantees belong to the engine crates built
-on it, such as `tc_aes` and `tc_des`, never to `tc_block_cipher`.
+[README.md](README.md); read it rather than restating it here. `tc_aead_cipher`
+is `no_std` and needs no allocator by default. Its only feature, `alloc`, is
+default-off and adds CCM, GCM-SIV, OCB and KCCM, which buffer the whole
+message, the growable `Grain128AeadEngine`, and `AeadParamsOwned`. It depends
+on `tc_block_cipher`, `tc_constant_time` and `tc_zeroize`, and on x86 targets
+also on `tc_runtime`, which backs SSE2 detection for SPARKLE. CI enforces
+these dependency sets with `cargo tree` on the `wasm32-unknown-unknown`,
+`aarch64-unknown-none` and x86 targets. The modes carry no cipher: key lengths
+and timing guarantees of the block ciphers belong to their own crates, such as
+`tc_aes`.
 
-`tc_aes` is constant time on its AES-NI and RustCrypto engines and variable
-time on its table and light engines. Every `tc_des`, `tc_aria` and
-`tc_dstu7624` engine is variable time, as is every RC2 engine in `tc_rc_cipher`; its RC5 and RC6
-engines are constant time only on processors with fixed-latency rotations and,
-for RC6, multiplication. `tc_block_modes` adds only data-independent work, so each mode
-is constant time exactly when its engine is. `tc_block_padding` adds and
-checks padding in constant time with respect to the block contents; only
-`pad_count`'s result reveals the count and whether the padding was valid.
-`tests/documentation.rs` in `tc_des`, `tc_aria`, `tc_rc_cipher`,
-`tc_dstu7624`, `tc_block_modes` and `tc_block_padding` requires each declaration it scans to
-say which. Keep the timing contract of each item stated in its doc
-comment, and do not let a dispatcher (`AesEngine`, `DesEngine`,
-`DesEdeEngine`, `AriaEngine`, `Rc2Engine`) select a leakier engine where a less leaky one
-is available.
+Engines that wrap a block cipher are named `XxxBlockCipher`, as in
+`tc_block_modes`; engines that carry their own primitive are named
+`XxxEngine`, as in `tc_aes`. Every engine implements `AeadCipher` and
+`AeadCipherInit`, and the modes also `AeadBlockCipher`. Parameter types only
+carry values; each engine validates them in `init`. A failed `init` leaves the
+engine uninitialized, encryption refuses an `init` that repeats the previous
+key and nonce by comparing a key-derived value in fixed time, never a copy of
+the key, and `mac()` returns the transmitted tag. Tag sizes are in bytes.
 
-Rust 1.85 is guaranteed only where the workspace controls every crate: the
-default build and first-party features such as `alloc`, whose dependencies are
-all `tc_*` crates. A feature that enables a third-party crate (`rustcrypto`
-enables `aes`, 0.9.3 of which requires 1.89) follows that crate's MSRV, and
-dev-dependencies (`criterion` requires 1.86) are exempt. The MSRV job therefore
-runs `cargo check` on 1.85 for the guaranteed builds only; tests run on stable.
-`.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
+The six modes are constant time exactly when their cipher is. The Ascon,
+Grain-128AEAD and SCHWAEMM engines are constant time, the SSE2 form of SPARKLE
+included. Lengths are public. `tests/documentation.rs` requires each
+declaration it scans to say which, and matches the phrase within one line, so
+never wrap a line between "constant" or "variable" and "time". Keep the timing
+contract of each item stated in its doc comment, and disclose what cannot be
+prevented, such as a growing `Vec` freeing its old allocation unwiped. A
+failed tag check must never release plaintext from `do_final`.
+
+`unsafe` code is denied at the crate root and allowed only in
+`sparkle::sse2`, behind run-time detection. Keep it there.
+
+Rust 1.85 is guaranteed for every build, since every dependency is a `tc_*`
+crate; dev-dependencies are exempt. The MSRV job therefore runs `cargo check`
+on 1.85 with and without `alloc`; tests run on stable. Stable Rust reports
+some `unsafe` blocks around SSE2 intrinsics as unused because they became safe
+in 1.87, so those helpers carry a scoped `allow(unused_unsafe)` until the MSRV
+moves. `.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
 `Cargo.lock` tracks the latest releases and stable CI tests what current
 toolchains resolve. Adding a third-party dependency to a default build or a
 first-party feature hands the 1.85 guarantee to that crate; raise it before
@@ -91,13 +91,11 @@ than 1.85.
 
 Documentation is part of the contract: crates use `#![deny(missing_docs)]`,
 doctests carry the executable examples, and CI runs `cargo doc` with
-`RUSTDOCFLAGS: -D warnings`, with and without `--all-features`. An additive
-public API change belongs in the crate README's contract lists — "Traits" and
-"Types" in `tc_block_cipher/README.md`, `tc_block_modes/README.md` and
-`tc_block_padding/README.md` and `tc_rc_cipher/README.md`,
-"Types" in `tc_aes/README.md`, `tc_des/README.md`, `tc_aria/README.md` and
-`tc_dstu7624/README.md` —
-and in the changelog, not only in the code.
+`RUSTDOCFLAGS: -D warnings`, with and without `--all-features`. Doc links to
+feature-gated items break the build without that feature, so name them in plain
+code spans. An additive public API change belongs in the crate README's
+contract lists — "Types", "Traits" and "Features" in `tc_aead_cipher/README.md`
+— and in the changelog, not only in the code.
 
 Work happens on `feat/*` branches off `develop`; pull requests target `develop`,
 which merges to `main`. Commit messages use an imperative subject and a wrapped
