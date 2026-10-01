@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  native:
+    name: Native / ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            host: x86_64-unknown-linux-gnu
+            x86: true
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            host: aarch64-unknown-linux-gnu
+            x86: false
+          - name: macOS ARM64
+            os: macos-14
+            host: aarch64-apple-darwin
+            x86: false
+          - name: Windows x64
+            os: windows-latest
+            host: x86_64-pc-windows-msvc
+            x86: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install native toolchain
+        run: |
+          rustup toolchain install stable-${{ matrix.host }} --profile minimal
+          rustup default stable-${{ matrix.host }}
+          rustc -vV
+          rustc -vV | grep -Fx 'host: ${{ matrix.host }}'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+      - run: cargo test --locked
+      - run: cargo test --locked --all-features
+      # AES-NI hosts otherwise never reach the dispatcher's table fallback.
+      - name: Test without AES-NI detection
+        if: matrix.x86
+        run: cargo test --locked -p tc_aes --features tc_runtime/disable-x86-aes-ni
+
+  x86:
+    name: Native execution / Linux i686
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install 32-bit compiler and runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc-multilib
+      - run: rustup toolchain install stable --profile minimal
+      - run: rustup default stable
+      - run: rustup target add i686-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked --target i686-unknown-linux-gnu
+      - run: cargo test --locked --target i686-unknown-linux-gnu --all-features
+
+  msrv:
+    name: MSRV / Rust 1.85.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install 1.85.0 --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        env:
+          RUSTUP_TOOLCHAIN: 1.85.0
+      # Rust 1.85 covers the libraries with every first-party feature. The
+      # rustcrypto and rand_core features follow their third-party crates'
+      # MSRV and dev-dependencies such as criterion are exempt, so tests run
+      # on stable only.
+      - run: cargo +1.85.0 check --locked
+      - run: cargo +1.85.0 check --locked -p tc_block_cipher --features alloc
+      - run: cargo +1.85.0 check --locked -p tc_block_modes --features alloc
+      - run: cargo +1.85.0 check --locked -p tc_rc_cipher --features alloc
+
+  quality:
+    name: Format, Clippy, docs and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - run: rustup default stable
+      - run: cargo fmt --all -- --check
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-only
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - run: cargo doc --locked --no-deps
+      - run: cargo doc --locked --no-deps --all-features
+      # Packaged together so the engine and mode crates are verified against
+      # this tc_block_cipher, not the release on crates.io.
+      - run: cargo package --locked -p tc_block_cipher -p tc_aes -p tc_des -p tc_aria -p tc_block_modes -p tc_block_padding -p tc_rc_cipher -p tc_dstu7624
+        env:
+          # Keep unpacked package manifests outside rust-cache's build tree.
+          CARGO_TARGET_DIR: ${{ runner.temp }}/package
+
+  portable:
+    name: Cross-architecture contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal
+      - run: rustup default stable
+      - run: rustup target add wasm32-unknown-unknown aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked --target wasm32-unknown-unknown
+      - run: cargo check --locked --target wasm32-unknown-unknown --all-features
+      - run: cargo check --locked --target aarch64-unknown-none
+      - run: cargo check --locked --target aarch64-unknown-none --all-features
+      - name: Check default dependency sets
+        run: |
+          check() {
+            expected="$1"; shift
+            actual="$(cargo tree --locked --edges normal --prefix none "$@" | cut -d' ' -f1 | sort -u | paste -sd' ')"
+            if [ "$actual" != "$expected" ]; then
+              echo "cargo tree $*: expected '$expected', got '$actual'" >&2
+              exit 1
+            fi
+          }
+          for target in aarch64-unknown-none wasm32-unknown-unknown; do
+            check 'tc_block_cipher tc_zeroize' -p tc_block_cipher --target "$target"
+            check 'tc_block_cipher tc_zeroize' -p tc_block_cipher --target "$target" --features alloc
+            check 'tc_aes tc_block_cipher tc_zeroize' -p tc_aes --target "$target"
+            check 'tc_block_cipher tc_des tc_zeroize' -p tc_des --target "$target"
+            check 'tc_aria tc_block_cipher tc_zeroize' -p tc_aria --target "$target"
+            check 'tc_block_cipher tc_block_modes tc_zeroize' -p tc_block_modes --target "$target"
+            check 'tc_block_cipher tc_block_modes tc_zeroize' -p tc_block_modes --target "$target" --features alloc
+            check 'tc_block_padding' -p tc_block_padding --target "$target"
+            check 'tc_block_cipher tc_rc_cipher tc_zeroize' -p tc_rc_cipher --target "$target"
+            check 'tc_block_cipher tc_rc_cipher tc_zeroize' -p tc_rc_cipher --target "$target" --features alloc
+            check 'tc_block_cipher tc_dstu7624 tc_zeroize' -p tc_dstu7624 --target "$target"
+          done
+          # tc_runtime backs AES-NI detection on x86 targets only. DES, ARIA,
+          # the RC ciphers and Kalyna have no hardware backend, and the modes and
+          # paddings add none of their own, so those crates keep the same sets
+          # there.
+          for target in x86_64-unknown-linux-gnu i686-unknown-linux-gnu; do
+            check 'tc_aes tc_block_cipher tc_runtime tc_zeroize' -p tc_aes --target "$target"
+            check 'tc_block_cipher tc_des tc_zeroize' -p tc_des --target "$target"
+            check 'tc_aria tc_block_cipher tc_zeroize' -p tc_aria --target "$target"
+            check 'tc_block_cipher tc_block_modes tc_zeroize' -p tc_block_modes --target "$target"
+            check 'tc_block_padding' -p tc_block_padding --target "$target"
+            check 'tc_block_cipher tc_rc_cipher tc_zeroize' -p tc_rc_cipher --target "$target"
+            check 'tc_block_cipher tc_dstu7624 tc_zeroize' -p tc_dstu7624 --target "$target"
+          done
