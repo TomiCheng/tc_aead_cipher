@@ -1,0 +1,5 @@
+# Lock the latest dependency releases even where they need a newer Rust than
+# the workspace rust-version, so stable CI tests what users on a current
+# toolchain resolve. The MSRV job checks only the build that 1.85 covers.
+[resolver]
+incompatible-rust-versions = "allow"

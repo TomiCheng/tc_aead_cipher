@@ -1,0 +1,98 @@
+//! Common AEAD initialization errors.
+
+use core::convert::Infallible;
+use core::error::Error;
+use core::fmt;
+use core::fmt::Display;
+
+/// A failure while initializing an AEAD construction; `E` is the underlying
+/// cipher's initialization error, `Infallible` for constructions without one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AeadInitError<E = Infallible> {
+    /// The key length is unsupported by a construction that keys itself.
+    InvalidKeyLength {
+        /// The key length that was supplied, in bytes.
+        actual: usize,
+    },
+    /// The underlying block cipher's block size is unsupported by the construction.
+    InvalidBlockSize {
+        /// The underlying cipher's block size, in bytes.
+        actual: usize,
+        /// A block size the construction accepts, in bytes.
+        required: usize,
+    },
+    /// The nonce length is outside the range supported by the construction.
+    InvalidNonceLength {
+        /// The nonce length that was supplied, in bytes.
+        actual: usize,
+    },
+    /// The initial associated data is longer than the construction can count.
+    InvalidInitialAadLength {
+        /// The initial associated data length that was supplied, in bytes.
+        actual: usize,
+    },
+    /// The requested authentication-tag size is unsupported.
+    InvalidMacSize {
+        /// The tag size that was requested, in bytes.
+        actual: usize,
+    },
+    /// The requested counter-length parameter is unsupported.
+    InvalidCounterSize {
+        /// The counter-length parameter that was requested.
+        actual: usize,
+    },
+    /// The same key and nonce would be reused for encryption.
+    NonceReuse,
+    /// A composed primitive failed despite validated internal invariants.
+    InternalFailure,
+    /// Initialization of the underlying cipher failed.
+    Cipher(E),
+}
+
+impl<E> Display for AeadInitError<E> {
+    /// Writes a short description of the error; the cipher's error is reachable
+    /// through `source`. Constant time: the fields hold only public lengths.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidKeyLength { actual } => {
+                write!(f, "invalid AEAD key length: {actual} bytes")
+            }
+            Self::InvalidBlockSize { actual, required } => {
+                write!(
+                    f,
+                    "invalid AEAD block cipher size: requires {required} bytes, got {actual}"
+                )
+            }
+            Self::InvalidNonceLength { actual } => {
+                write!(f, "invalid AEAD nonce length: {actual} bytes")
+            }
+            Self::InvalidInitialAadLength { actual } => {
+                write!(
+                    f,
+                    "invalid AEAD initial associated data length: {actual} bytes"
+                )
+            }
+            Self::InvalidMacSize { actual } => {
+                write!(f, "invalid AEAD authentication-tag size: {actual} bytes")
+            }
+            Self::InvalidCounterSize { actual } => {
+                write!(f, "invalid AEAD counter size: {actual} bytes")
+            }
+            Self::NonceReuse => f.write_str("key and nonce cannot be reused for AEAD encryption"),
+            Self::InternalFailure => f.write_str("internal AEAD primitive failure"),
+            Self::Cipher(_) => f.write_str("underlying cipher initialization failed"),
+        }
+    }
+}
+
+impl<E: Error + 'static> Error for AeadInitError<E> {
+    /// Returns the underlying cipher's error for `Cipher`, and `None`
+    /// otherwise. Constant time.
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Cipher(error) => Some(error),
+            _ => None,
+        }
+    }
+}
