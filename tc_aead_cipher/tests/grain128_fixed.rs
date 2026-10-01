@@ -1,5 +1,5 @@
 use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, FixedGrain128Aead,
+    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, FixedGrain128AeadEngine,
 };
 use tc_block_cipher::CipherDirection;
 
@@ -14,7 +14,7 @@ fn the_fixed_engine_matches_the_official_vector_with_incremental_aad() {
     let aad = core::array::from_fn::<_, 16, _>(|index| index as u8);
     let plaintext = core::array::from_fn::<_, 16, _>(|index| index as u8);
     let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-    let mut engine = FixedGrain128Aead::<16>::new();
+    let mut engine = FixedGrain128AeadEngine::<16>::new();
 
     engine.init(CipherDirection::Encrypt, &params).unwrap();
     engine.process_aad_bytes(&aad[..7]).unwrap();
@@ -39,7 +39,7 @@ fn aad_beyond_the_fixed_capacity_is_rejected() {
     let key = [0_u8; KEY_BYTES];
     let nonce = [0_u8; NONCE_BYTES];
     let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-    let mut engine = FixedGrain128Aead::<3>::new();
+    let mut engine = FixedGrain128AeadEngine::<3>::new();
 
     engine.init(CipherDirection::Encrypt, &params).unwrap();
     engine.process_aad_bytes(&[1, 2]).unwrap();
@@ -57,7 +57,7 @@ fn initial_aad_beyond_the_fixed_capacity_is_rejected() {
     let key = [0_u8; KEY_BYTES];
     let nonce = [0_u8; NONCE_BYTES];
     let params = AeadParamsRef::new(&key, &nonce, 8, &[1, 2]);
-    let mut engine = FixedGrain128Aead::<1>::new();
+    let mut engine = FixedGrain128AeadEngine::<1>::new();
 
     assert_eq!(
         engine.init(CipherDirection::Encrypt, &params),

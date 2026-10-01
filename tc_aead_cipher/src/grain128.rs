@@ -7,6 +7,6 @@ pub(crate) const NONCE_BYTES: usize = 12;
 /// Authentication-tag length in bytes.
 pub(crate) const TAG_BYTES: usize = 8;
 
-pub use engine::FixedGrain128Aead;
+pub use engine::FixedGrain128AeadEngine;
 #[cfg(feature = "alloc")]
-pub use engine::Grain128Aead;
+pub use engine::Grain128AeadEngine;

@@ -1,8 +1,8 @@
 #![cfg(feature = "alloc")]
 
 use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, FixedGrain128Aead,
-    Grain128Aead,
+    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, FixedGrain128AeadEngine,
+    Grain128AeadEngine,
 };
 use tc_block_cipher::CipherDirection;
 
@@ -10,7 +10,7 @@ const KEY_BYTES: usize = 16;
 const NONCE_BYTES: usize = 12;
 const TAG_BYTES: usize = 8;
 
-fn algo_name(engine: &Grain128Aead) -> String {
+fn algo_name(engine: &Grain128AeadEngine) -> String {
     engine.to_string()
 }
 
@@ -76,7 +76,7 @@ fn material() -> (Vec<u8>, Vec<u8>) {
 fn encrypt(plaintext: &[u8], aad: &[u8]) -> Vec<u8> {
     let (key, nonce) = material();
     let params = AeadParamsRef::new(&key, &nonce, 8, aad);
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
     engine.init(CipherDirection::Encrypt, &params).unwrap();
     let mut output = vec![0xA5; engine.output_len(plaintext.len()).unwrap()];
     let mut written = engine.process_bytes(plaintext, &mut output).unwrap();
@@ -88,7 +88,7 @@ fn encrypt(plaintext: &[u8], aad: &[u8]) -> Vec<u8> {
 fn decrypt(ciphertext: &[u8], aad: &[u8]) -> Vec<u8> {
     let (key, nonce) = material();
     let params = AeadParamsRef::new(&key, &nonce, 8, aad);
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
     engine.init(CipherDirection::Decrypt, &params).unwrap();
     let mut output = vec![0xA5; engine.output_len(ciphertext.len()).unwrap()];
     let mut written = engine.process_bytes(ciphertext, &mut output).unwrap();
@@ -118,7 +118,7 @@ fn incremental_aad_and_data_match_the_vectors() {
 
     for split in 0..=plaintext.len() {
         let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-        let mut engine = Grain128Aead::new();
+        let mut engine = Grain128AeadEngine::new();
         engine.init(CipherDirection::Encrypt, &params).unwrap();
         engine.process_aad_bytes(&aad[..7]).unwrap();
         engine.process_aad_bytes(&aad[7..]).unwrap();
@@ -136,7 +136,7 @@ fn incremental_aad_and_data_match_the_vectors() {
 
     for split in 0..=expected.len() {
         let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-        let mut engine = Grain128Aead::new();
+        let mut engine = Grain128AeadEngine::new();
         engine.init(CipherDirection::Decrypt, &params).unwrap();
         engine.process_aad_bytes(&aad[..15]).unwrap();
         engine.process_aad_bytes(&aad[15..]).unwrap();
@@ -157,7 +157,7 @@ fn incremental_aad_and_data_match_the_vectors() {
 fn the_fixed_engine_enforces_its_aad_capacity() {
     let (key, nonce) = material();
     let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-    let mut engine = FixedGrain128Aead::<3>::new();
+    let mut engine = FixedGrain128AeadEngine::<3>::new();
     engine.init(CipherDirection::Encrypt, &params).unwrap();
     engine.process_aad_bytes(&[1, 2]).unwrap();
     assert_eq!(
@@ -174,7 +174,7 @@ fn the_fixed_engine_enforces_its_aad_capacity() {
 #[test]
 fn invalid_initialization_lengths_are_rejected() {
     let (key, nonce) = material();
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
 
     let params = AeadParamsRef::new(&key[..KEY_BYTES - 1], &nonce, 8, &[]);
     assert_eq!(
@@ -193,7 +193,7 @@ fn invalid_initialization_lengths_are_rejected() {
     );
 
     let params = AeadParamsRef::new(&key, &nonce, 8, &[1, 2]);
-    let mut fixed = FixedGrain128Aead::<1>::new();
+    let mut fixed = FixedGrain128AeadEngine::<1>::new();
     assert_eq!(
         fixed.init(CipherDirection::Encrypt, &params),
         Err(AeadInitError::InvalidInitialAadLength { actual: 2 })
@@ -208,7 +208,7 @@ fn modified_tags_and_short_ciphertexts_are_rejected() {
     *ciphertext.last_mut().unwrap() ^= 1;
     let (key, nonce) = material();
     let params = AeadParamsRef::new(&key, &nonce, 8, &aad);
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
     engine.init(CipherDirection::Decrypt, &params).unwrap();
     let mut output = vec![0xA5; engine.output_len(ciphertext.len()).unwrap()];
     let written = engine.process_bytes(&ciphertext, &mut output).unwrap();
@@ -234,7 +234,7 @@ fn modified_tags_and_short_ciphertexts_are_rejected() {
 fn the_metadata_state_rules_and_buffer_rules_are_enforced() {
     let (key, nonce) = material();
     let params = AeadParamsRef::new(&key, &nonce, 8, &[]);
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
     assert_eq!(algo_name(&engine), "Grain-128AEAD");
     assert_eq!(engine.key_bytes(), KEY_BYTES);
     assert_eq!(engine.nonce_bytes(), NONCE_BYTES);
@@ -265,7 +265,7 @@ fn the_metadata_state_rules_and_buffer_rules_are_enforced() {
 #[test]
 fn a_tag_size_other_than_eight_bytes_is_rejected() {
     let (key, nonce) = material();
-    let mut engine = Grain128Aead::new();
+    let mut engine = Grain128AeadEngine::new();
     for mac_size in [4, 16] {
         assert_eq!(
             engine.init(

@@ -1,5 +1,5 @@
 use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, AsconAead128,
+    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, AsconAead128Engine,
 };
 use tc_block_cipher::CipherDirection;
 
@@ -88,7 +88,7 @@ fn key_and_nonce() -> (Vec<u8>, Vec<u8>) {
 fn encrypt(plaintext: &[u8], aad: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let (key, nonce) = key_and_nonce();
     let params = AeadParamsRef::new(&key, &nonce, 16, &[]);
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     engine.init(CipherDirection::Encrypt, &params).unwrap();
     engine.process_aad_bytes(aad).unwrap();
 
@@ -102,7 +102,7 @@ fn encrypt(plaintext: &[u8], aad: &[u8]) -> (Vec<u8>, Vec<u8>) {
 fn decrypt(ciphertext: &[u8], aad: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let (key, nonce) = key_and_nonce();
     let params = AeadParamsRef::new(&key, &nonce, 16, &[]);
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     engine.init(CipherDirection::Decrypt, &params).unwrap();
     engine.process_aad_bytes(aad).unwrap();
 
@@ -140,7 +140,7 @@ fn every_message_split_and_both_aad_paths_match_the_vector() {
 
     for split in 0..=plaintext.len() {
         let params = AeadParamsRef::new(&key, &nonce, 16, &aad);
-        let mut engine = AsconAead128::new();
+        let mut engine = AsconAead128Engine::new();
         engine.init(CipherDirection::Encrypt, &params).unwrap();
         let mut output = vec![0; expected.len()];
         let mut written = engine
@@ -155,7 +155,7 @@ fn every_message_split_and_both_aad_paths_match_the_vector() {
 
     for split in 0..=expected.len() {
         let params = AeadParamsRef::new(&key, &nonce, 16, &[]);
-        let mut engine = AsconAead128::new();
+        let mut engine = AsconAead128Engine::new();
         engine.init(CipherDirection::Decrypt, &params).unwrap();
         engine.process_aad_bytes(&aad[..15]).unwrap();
         engine.process_aad_bytes(&aad[15..]).unwrap();
@@ -179,7 +179,7 @@ fn a_modified_tag_or_a_ciphertext_shorter_than_the_tag_is_rejected() {
     *ciphertext.last_mut().unwrap() ^= 1;
     let (key, nonce) = key_and_nonce();
     let params = AeadParamsRef::new(&key, &nonce, 16, &[]);
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     engine.init(CipherDirection::Decrypt, &params).unwrap();
     let mut output = vec![0xa5; plaintext.len()];
     let written = engine.process_bytes(&ciphertext, &mut output).unwrap();
@@ -209,7 +209,7 @@ fn the_name_output_size_and_initialization_errors_are_reported() {
     let key = [0x11; 16];
     let nonce = [0x22; 16];
     let params = AeadParamsRef::new(&key, &nonce, 16, &[]);
-    let mut concrete = AsconAead128::new();
+    let mut concrete = AsconAead128Engine::new();
     concrete.init(CipherDirection::Encrypt, &params).unwrap();
 
     assert_eq!(concrete.to_string(), "Ascon-AEAD128");
@@ -242,7 +242,7 @@ fn truncated_tags_are_the_leftmost_bytes_of_the_full_tag() {
             let expected = &full[..ciphertext_len + mac_size];
             let params = AeadParamsRef::new(&key, &nonce, mac_size, &aad);
 
-            let mut encryptor = AsconAead128::new();
+            let mut encryptor = AsconAead128Engine::new();
             encryptor.init(CipherDirection::Encrypt, &params).unwrap();
             let mut output = vec![0; encryptor.output_len(plaintext.len()).unwrap()];
             let mut written = encryptor.process_bytes(&plaintext, &mut output).unwrap();
@@ -253,7 +253,7 @@ fn truncated_tags_are_the_leftmost_bytes_of_the_full_tag() {
                 Some(&full[ciphertext_len..ciphertext_len + mac_size])
             );
 
-            let mut decryptor = AsconAead128::new();
+            let mut decryptor = AsconAead128Engine::new();
             decryptor.init(CipherDirection::Decrypt, &params).unwrap();
             let mut recovered = vec![0; decryptor.output_len(expected.len()).unwrap()];
             let mut recovered_len = 0;
@@ -267,7 +267,7 @@ fn truncated_tags_are_the_leftmost_bytes_of_the_full_tag() {
 
             let mut tampered = expected.to_vec();
             *tampered.last_mut().unwrap() ^= 1;
-            let mut decryptor = AsconAead128::new();
+            let mut decryptor = AsconAead128Engine::new();
             decryptor.init(CipherDirection::Decrypt, &params).unwrap();
             let mut recovered = vec![0; tampered.len()];
             let written = decryptor.process_bytes(&tampered, &mut recovered).unwrap();
@@ -282,7 +282,7 @@ fn truncated_tags_are_the_leftmost_bytes_of_the_full_tag() {
 #[test]
 fn tag_sizes_outside_four_to_sixteen_bytes_are_rejected() {
     let (key, nonce) = key_and_nonce();
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     for mac_size in [0, 3, 17] {
         assert_eq!(
             engine.init(
@@ -300,7 +300,7 @@ fn reset_right_after_an_encryption_init_with_initial_aad_keeps_the_engine_usable
     let plaintext = hex(kat.plaintext);
     let aad = hex(kat.aad);
     let (key, nonce) = key_and_nonce();
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     engine
         .init(
             CipherDirection::Encrypt,
@@ -318,7 +318,7 @@ fn reset_right_after_an_encryption_init_with_initial_aad_keeps_the_engine_usable
 #[test]
 fn empty_aad_still_reports_the_engine_state() {
     let (key, nonce) = key_and_nonce();
-    let mut engine = AsconAead128::new();
+    let mut engine = AsconAead128Engine::new();
     assert_eq!(
         engine.process_aad_bytes(&[]),
         Err(AeadError::NotInitialized)

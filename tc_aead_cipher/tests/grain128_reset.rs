@@ -1,7 +1,8 @@
 #![cfg(feature = "alloc")]
 
 use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadParamsRef, FixedGrain128Aead, Grain128Aead,
+    AeadCipher, AeadCipherInit, AeadError, AeadParamsRef, FixedGrain128AeadEngine,
+    Grain128AeadEngine,
 };
 use tc_block_cipher::CipherDirection;
 
@@ -14,7 +15,7 @@ fn ciphertext() -> ([u8; KEY_BYTES], [u8; NONCE_BYTES], Vec<u8>) {
     let nonce = [0x22; NONCE_BYTES];
     let params = AeadParamsRef::new(&key, &nonce, 8, b"initial aad");
     let plaintext = b"grain reset";
-    let mut encryptor = Grain128Aead::new();
+    let mut encryptor = Grain128AeadEngine::new();
     encryptor.init(CipherDirection::Encrypt, &params).unwrap();
     let mut output = vec![0u8; plaintext.len() + TAG_BYTES];
     let mut written = encryptor.process_bytes(plaintext, &mut output).unwrap();
@@ -32,7 +33,7 @@ fn ciphertext() -> ([u8; KEY_BYTES], [u8; NONCE_BYTES], Vec<u8>) {
 fn reset_restores_allocating_decryptor_with_initial_aad() {
     let (key, nonce, ciphertext) = ciphertext();
     let params = AeadParamsRef::new(&key, &nonce, 8, b"initial aad");
-    let mut decryptor = Grain128Aead::new();
+    let mut decryptor = Grain128AeadEngine::new();
     decryptor.init(CipherDirection::Decrypt, &params).unwrap();
     decryptor.process_aad_bytes(b"discarded").unwrap();
     decryptor.process_bytes(&ciphertext[..4], &mut []).unwrap();
@@ -50,7 +51,7 @@ fn reset_restores_allocating_decryptor_with_initial_aad() {
 fn reset_restores_fixed_decryptor_with_initial_aad() {
     let (key, nonce, ciphertext) = ciphertext();
     let params = AeadParamsRef::new(&key, &nonce, 8, b"initial aad");
-    let mut decryptor = FixedGrain128Aead::<32>::new();
+    let mut decryptor = FixedGrain128AeadEngine::<32>::new();
     decryptor.init(CipherDirection::Decrypt, &params).unwrap();
     decryptor.process_aad_bytes(b"discarded").unwrap();
     decryptor.reset();
@@ -67,7 +68,7 @@ fn reset_restores_fixed_decryptor_with_initial_aad() {
 fn reset_right_after_an_encryption_init_with_initial_aad_keeps_the_engine_usable() {
     let (key, nonce, expected) = ciphertext();
     let params = AeadParamsRef::new(&key, &nonce, 8, b"initial aad");
-    let mut encryptor = Grain128Aead::new();
+    let mut encryptor = Grain128AeadEngine::new();
     encryptor.init(CipherDirection::Encrypt, &params).unwrap();
     encryptor.reset();
     let mut output = vec![0u8; expected.len()];

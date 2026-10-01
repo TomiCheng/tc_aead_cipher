@@ -22,7 +22,7 @@ mod params;
 mod sparkle;
 mod traits;
 
-pub use ascon::{AsconAead128, AsconLegacyEngine, AsconLegacyVariant};
+pub use ascon::{AsconAead128Engine, AsconLegacyEngine, AsconLegacyVariant};
 #[cfg(feature = "alloc")]
 pub use ccm::CcmBlockCipher;
 pub use eax::EaxBlockCipher;
@@ -30,9 +30,9 @@ pub use errors::{AeadError, AeadInitError};
 pub use gcm::GcmBlockCipher;
 #[cfg(feature = "alloc")]
 pub use gcm_siv::GcmSivBlockCipher;
-pub use grain128::FixedGrain128Aead;
+pub use grain128::FixedGrain128AeadEngine;
 #[cfg(feature = "alloc")]
-pub use grain128::Grain128Aead;
+pub use grain128::Grain128AeadEngine;
 #[cfg(feature = "alloc")]
 pub use kccm::KccmBlockCipher;
 #[cfg(feature = "alloc")]

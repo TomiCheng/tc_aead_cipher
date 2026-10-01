@@ -664,12 +664,12 @@ where
 /// This type is available with the `alloc` feature and accepts AAD of
 /// any length supported by the allocator.
 #[cfg(feature = "alloc")]
-pub struct Grain128Aead {
+pub struct Grain128AeadEngine {
     inner: Inner<Vec<u8>>,
 }
 
 #[cfg(feature = "alloc")]
-impl Grain128Aead {
+impl Grain128AeadEngine {
     /// Creates an uninitialized Grain-128AEAD engine.
     pub const fn new() -> Self {
         Self {
@@ -694,21 +694,21 @@ impl Grain128Aead {
 }
 
 #[cfg(feature = "alloc")]
-impl Default for Grain128Aead {
+impl Default for Grain128AeadEngine {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(feature = "alloc")]
-impl Display for Grain128Aead {
+impl Display for Grain128AeadEngine {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Grain-128AEAD")
     }
 }
 
 #[cfg(feature = "alloc")]
-impl AeadCipher for Grain128Aead {
+impl AeadCipher for Grain128AeadEngine {
     type Error = AeadError;
 
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
@@ -741,7 +741,7 @@ impl AeadCipher for Grain128Aead {
 }
 
 #[cfg(feature = "alloc")]
-impl<P> AeadCipherInit<P> for Grain128Aead
+impl<P> AeadCipherInit<P> for Grain128AeadEngine
 where
     P: KeyParams + NonceParams + InitialAadParams + MacSizeParams + ?Sized,
 {
@@ -756,11 +756,11 @@ where
 ///
 /// `MAX_AAD_LEN` is the maximum amount of AAD that can be buffered for one
 /// operation. It is a capacity, not the exact AAD length.
-pub struct FixedGrain128Aead<const MAX_AAD_LEN: usize> {
+pub struct FixedGrain128AeadEngine<const MAX_AAD_LEN: usize> {
     inner: Inner<FixedAadBuffer<MAX_AAD_LEN>>,
 }
 
-impl<const MAX_AAD_LEN: usize> FixedGrain128Aead<MAX_AAD_LEN> {
+impl<const MAX_AAD_LEN: usize> FixedGrain128AeadEngine<MAX_AAD_LEN> {
     /// Creates an uninitialized Grain-128AEAD engine.
     pub const fn new() -> Self {
         Self {
@@ -789,19 +789,19 @@ impl<const MAX_AAD_LEN: usize> FixedGrain128Aead<MAX_AAD_LEN> {
     }
 }
 
-impl<const MAX_AAD_LEN: usize> Default for FixedGrain128Aead<MAX_AAD_LEN> {
+impl<const MAX_AAD_LEN: usize> Default for FixedGrain128AeadEngine<MAX_AAD_LEN> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const MAX_AAD_LEN: usize> Display for FixedGrain128Aead<MAX_AAD_LEN> {
+impl<const MAX_AAD_LEN: usize> Display for FixedGrain128AeadEngine<MAX_AAD_LEN> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Grain-128AEAD")
     }
 }
 
-impl<const MAX_AAD_LEN: usize> AeadCipher for FixedGrain128Aead<MAX_AAD_LEN> {
+impl<const MAX_AAD_LEN: usize> AeadCipher for FixedGrain128AeadEngine<MAX_AAD_LEN> {
     type Error = AeadError;
 
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
@@ -833,7 +833,7 @@ impl<const MAX_AAD_LEN: usize> AeadCipher for FixedGrain128Aead<MAX_AAD_LEN> {
     }
 }
 
-impl<P, const MAX_AAD_LEN: usize> AeadCipherInit<P> for FixedGrain128Aead<MAX_AAD_LEN>
+impl<P, const MAX_AAD_LEN: usize> AeadCipherInit<P> for FixedGrain128AeadEngine<MAX_AAD_LEN>
 where
     P: KeyParams + NonceParams + InitialAadParams + MacSizeParams + ?Sized,
 {

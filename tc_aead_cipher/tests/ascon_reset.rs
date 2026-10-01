@@ -1,5 +1,5 @@
 use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadParamsRef, AsconAead128, AsconLegacyEngine,
+    AeadCipher, AeadCipherInit, AeadError, AeadParamsRef, AsconAead128Engine, AsconLegacyEngine,
     AsconLegacyVariant,
 };
 use tc_block_cipher::CipherDirection;
@@ -11,7 +11,7 @@ fn ascon_aead128_reset_restores_decryption_with_initial_aad() {
     let params = AeadParamsRef::new(&key, &nonce, 16, b"initial aad");
     let plaintext = b"reset message";
 
-    let mut encryptor = AsconAead128::new();
+    let mut encryptor = AsconAead128Engine::new();
     encryptor.init(CipherDirection::Encrypt, &params).unwrap();
     let mut ciphertext = vec![0u8; plaintext.len() + 16];
     let mut written = encryptor.process_bytes(plaintext, &mut ciphertext).unwrap();
@@ -24,7 +24,7 @@ fn ascon_aead128_reset_restores_decryption_with_initial_aad() {
         Err(AeadError::AlreadyFinalized)
     );
 
-    let mut decryptor = AsconAead128::new();
+    let mut decryptor = AsconAead128Engine::new();
     decryptor.init(CipherDirection::Decrypt, &params).unwrap();
     decryptor.process_aad_bytes(b"discarded").unwrap();
     assert_eq!(decryptor.process_bytes(&ciphertext[..5], &mut []), Ok(0));

@@ -39,7 +39,7 @@ enum State {
 /// Decryption retains the trailing tag and verifies it during finalization.
 /// Plaintext emitted before successful finalization is unauthenticated and must
 /// not be released to consumers.
-pub struct AsconAead128 {
+pub struct AsconAead128Engine {
     buffer: [u8; DECRYPT_BUFFER_BYTES],
     buffer_pos: usize,
     key: [u64; 2],
@@ -54,7 +54,7 @@ pub struct AsconAead128 {
     initial_state: State,
 }
 
-impl AsconAead128 {
+impl AsconAead128Engine {
     /// Creates an uninitialized engine.
     pub const fn new() -> Self {
         Self {
@@ -343,7 +343,7 @@ impl AsconAead128 {
     }
 }
 
-impl Drop for AsconAead128 {
+impl Drop for AsconAead128Engine {
     fn drop(&mut self) {
         self.key.zeroize();
         self.nonce.zeroize();
@@ -355,19 +355,19 @@ impl Drop for AsconAead128 {
     }
 }
 
-impl Default for AsconAead128 {
+impl Default for AsconAead128Engine {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Display for AsconAead128 {
+impl Display for AsconAead128Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Ascon-AEAD128")
     }
 }
 
-impl AeadCipher for AsconAead128 {
+impl AeadCipher for AsconAead128Engine {
     type Error = AeadError;
 
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
@@ -530,7 +530,7 @@ impl AeadCipher for AsconAead128 {
     }
 }
 
-impl<P> AeadCipherInit<P> for AsconAead128
+impl<P> AeadCipherInit<P> for AsconAead128Engine
 where
     P: KeyParams + NonceParams + InitialAadParams + MacSizeParams + ?Sized,
 {
@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn ascon_reports_invalid_key_nonce_and_tag_sizes_as_distinct_aead_errors() {
         let bytes = [0u8; 17];
-        let mut engine = AsconAead128::new();
+        let mut engine = AsconAead128Engine::new();
         for direction in [CipherDirection::Encrypt, CipherDirection::Decrypt] {
             for length in [0, 15, 17] {
                 let params = AeadParamsRef::new(&bytes[..length], &bytes[..16], 16, &[]);
