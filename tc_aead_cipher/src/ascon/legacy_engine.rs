@@ -21,7 +21,7 @@ pub enum AsconLegacyVariant {
 }
 
 impl AsconLegacyVariant {
-    /// Returns the required key length in bytes.
+    /// Returns the required key length in bytes. Constant time.
     pub const fn key_bytes(self) -> usize {
         match self {
             Self::Ascon128 | Self::Ascon128a => KEY_BYTES_128,
@@ -53,6 +53,7 @@ impl AsconLegacyVariant {
 }
 
 impl Display for AsconLegacyVariant {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Ascon128 => f.write_str("Ascon-128 AEAD"),
@@ -101,6 +102,10 @@ enum State {
 /// Decryption may emit unauthenticated plaintext before
 /// [`AeadCipher::do_final`] verifies the tag. Callers must not release that
 /// plaintext before finalization succeeds.
+///
+/// Constant time: the permutation is a bitsliced S-box and linear layer on
+/// 64-bit words, without tables or data-dependent branches, and the tag is
+/// compared in fixed time. Only public lengths decide how much work is done.
 pub struct AsconLegacyEngine {
     variant: AsconLegacyVariant,
     buffer: [u8; MAX_DECRYPT_BUFFER_BYTES],
@@ -117,7 +122,7 @@ pub struct AsconLegacyEngine {
 }
 
 impl AsconLegacyEngine {
-    /// Creates an uninitialized engine for `variant`.
+    /// Creates an uninitialized engine for `variant`. Constant time.
     pub const fn new(variant: AsconLegacyVariant) -> Self {
         Self {
             variant,
@@ -142,22 +147,22 @@ impl AsconLegacyEngine {
         self.state = self.initial_state;
     }
 
-    /// Returns the selected legacy Ascon variant.
+    /// Returns the selected legacy Ascon variant. Constant time.
     pub const fn variant(&self) -> AsconLegacyVariant {
         self.variant
     }
 
-    /// Returns the required key length for the selected variant.
+    /// Returns the required key length for the selected variant. Constant time.
     pub const fn key_bytes(&self) -> usize {
         self.variant.key_bytes()
     }
 
-    /// Returns the required nonce length.
+    /// Returns the required nonce length. Constant time.
     pub const fn nonce_bytes(&self) -> usize {
         NONCE_BYTES
     }
 
-    /// Returns the authentication-tag length.
+    /// Returns the authentication-tag length. Constant time.
     pub const fn tag_bytes(&self) -> usize {
         TAG_BYTES
     }
@@ -485,6 +490,7 @@ impl Drop for AsconLegacyEngine {
 }
 
 impl Display for AsconLegacyEngine {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(&self.variant, f)
     }
@@ -493,6 +499,8 @@ impl Display for AsconLegacyEngine {
 impl AeadCipher for AsconLegacyEngine {
     type Error = AeadError;
 
+    /// Absorbs `input` as associated data. Constant time: only its length
+    /// decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         // Report the state even for empty input, which leaves it unchanged.
         self.current_direction()?;
@@ -508,6 +516,8 @@ impl AeadCipher for AsconLegacyEngine {
         Ok(())
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.update_output_len(input.len())?;
@@ -527,6 +537,9 @@ impl AeadCipher for AsconLegacyEngine {
         })
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.output_len(0)?;
@@ -590,10 +603,14 @@ impl AeadCipher for AsconLegacyEngine {
         }
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| mac.as_slice())
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.buffer.zeroize();
@@ -611,6 +628,8 @@ impl AeadCipher for AsconLegacyEngine {
         }
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let total = match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(TAG_BYTES),
@@ -629,6 +648,8 @@ impl AeadCipher for AsconLegacyEngine {
         Ok(total - total % rate)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         Ok(match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(TAG_BYTES),
@@ -655,6 +676,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

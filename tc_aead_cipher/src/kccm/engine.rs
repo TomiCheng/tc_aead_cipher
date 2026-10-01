@@ -30,6 +30,15 @@ enum State {
 ///
 /// `NB = 4` is the standard practical default. The construction also permits
 /// 6 and 8. Message and AAD lengths must be complete cipher blocks.
+///
+/// Constant time exactly when the cipher is: the CBC-MAC, the counter additions
+/// and the tag comparison do no data-dependent work. Only public lengths decide
+/// how much work is done. The DSTU 7624 engines of `tc_dstu7624` index tables
+/// with secret data, so KCCM over them leaks timing through the cipher.
+///
+/// The buffers are `Vec`s, wiped when cleared and on drop. A `Vec` that grows,
+/// though, frees its previous allocation without wiping it, so copies of
+/// earlier bytes can remain in freed memory until it is reused.
 pub struct KccmBlockCipher<C, const NB: usize = 4> {
     cipher: C,
     state: State,
@@ -48,6 +57,7 @@ pub struct KccmBlockCipher<C, const NB: usize = 4> {
 
 impl<C> KccmBlockCipher<C, 4> {
     /// Creates an uninitialized KCCM engine using the recommended `Nb = 4`.
+    /// Constant time.
     pub const fn new(cipher: C) -> Self {
         Self::with_nb(cipher)
     }
@@ -55,6 +65,7 @@ impl<C> KccmBlockCipher<C, 4> {
 
 impl<C, const NB: usize> KccmBlockCipher<C, NB> {
     /// Creates an uninitialized KCCM engine with the type's `NB` value.
+    /// Constant time.
     pub const fn with_nb(cipher: C) -> Self {
         Self {
             cipher,
@@ -249,6 +260,8 @@ impl<C: BlockCipher, const NB: usize> KccmBlockCipher<C, NB> {
 }
 
 impl<C: Display, const NB: usize> Display for KccmBlockCipher<C, NB> {
+    /// Writes the cipher's name followed by `/KCCM`. Constant time: no key
+    /// material is inspected.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.cipher.fmt(f)?;
         f.write_str("/KCCM")
@@ -262,6 +275,8 @@ where
 {
     type Error = AeadError<C::Error>;
 
+    /// Buffers `input` as associated data until `do_final`. Constant time: only
+    /// its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.direction()?;
         if self.data_started {
@@ -277,6 +292,8 @@ where
         Ok(())
     }
 
+    /// Buffers `input` until `do_final` and writes nothing. Constant time: only
+    /// its length decides the work.
     fn process_bytes(&mut self, input: &[u8], _output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         let total = self
@@ -297,6 +314,9 @@ where
         Ok(0)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time exactly when the cipher is: the tag is compared in fixed
+    /// time, and only the result reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         let required = self.required_output(0)?;
@@ -316,10 +336,14 @@ where
         result
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| &mac[..self.mac_size])
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.state = match self.state {
@@ -337,10 +361,14 @@ where
         self.clear_packet();
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, _input_len: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.required_output(input_len)
     }
@@ -353,6 +381,7 @@ where
 {
     type Cipher = C;
 
+    /// Returns the wrapped block cipher. Constant time.
     fn underlying_cipher(&self) -> &Self::Cipher {
         &self.cipher
     }
@@ -366,6 +395,10 @@ where
 {
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
+    /// Keys the cipher and starts a message, as described on
+    /// `AeadCipherInit::init`. Constant time exactly when the cipher's key
+    /// setup and block encryption are: validation reads only public lengths,
+    /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

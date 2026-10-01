@@ -39,6 +39,10 @@ enum State {
 /// Decryption retains the trailing tag and verifies it during finalization.
 /// Plaintext emitted before successful finalization is unauthenticated and must
 /// not be released to consumers.
+///
+/// Constant time: the permutation is a bitsliced S-box and linear layer on
+/// 64-bit words, without tables or data-dependent branches, and the tag is
+/// compared in fixed time. Only public lengths decide how much work is done.
 pub struct AsconAead128Engine {
     buffer: [u8; DECRYPT_BUFFER_BYTES],
     buffer_pos: usize,
@@ -55,7 +59,7 @@ pub struct AsconAead128Engine {
 }
 
 impl AsconAead128Engine {
-    /// Creates an uninitialized engine.
+    /// Creates an uninitialized engine. Constant time.
     pub const fn new() -> Self {
         Self {
             buffer: [0; DECRYPT_BUFFER_BYTES],
@@ -356,12 +360,14 @@ impl Drop for AsconAead128Engine {
 }
 
 impl Default for AsconAead128Engine {
+    /// Same as [`new`](Self::new). Constant time.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Display for AsconAead128Engine {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Ascon-AEAD128")
     }
@@ -370,6 +376,8 @@ impl Display for AsconAead128Engine {
 impl AeadCipher for AsconAead128Engine {
     type Error = AeadError;
 
+    /// Absorbs `input` as associated data. Constant time: only its length
+    /// decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         // Report the state even for empty input, which leaves it unchanged.
         self.current_direction()?;
@@ -385,6 +393,8 @@ impl AeadCipher for AsconAead128Engine {
         Ok(())
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.update_output_len(input.len())?;
@@ -404,6 +414,9 @@ impl AeadCipher for AsconAead128Engine {
         })
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.output_len(0)?;
@@ -472,10 +485,14 @@ impl AeadCipher for AsconAead128Engine {
         }
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| &mac[..self.mac_size])
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.buffer.zeroize();
@@ -493,6 +510,8 @@ impl AeadCipher for AsconAead128Engine {
         }
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let total = match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(self.mac_size),
@@ -510,6 +529,8 @@ impl AeadCipher for AsconAead128Engine {
         Ok(total - total % RATE)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         Ok(match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(self.mac_size),
@@ -536,6 +557,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

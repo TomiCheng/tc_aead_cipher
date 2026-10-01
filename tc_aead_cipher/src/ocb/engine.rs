@@ -29,6 +29,14 @@ enum State {
 /// This implementation buffers the complete packet. In particular,
 /// decryption does not copy plaintext to caller memory before authentication
 /// succeeds.
+///
+/// Constant time exactly when the cipher is: the offsets come from masked
+/// doubling selected by the public block index, and the tag is compared in
+/// fixed time. Only public lengths decide how much work is done.
+///
+/// The buffers are `Vec`s, wiped when cleared and on drop. A `Vec` that grows,
+/// though, frees its previous allocation without wiping it, so copies of
+/// earlier bytes can remain in freed memory until it is reused.
 pub struct OcbBlockCipher<C> {
     hash_cipher: C,
     main_cipher: C,
@@ -56,7 +64,7 @@ impl<C> OcbBlockCipher<C> {
     ///
     /// Both arguments must implement the same block-cipher algorithm. The
     /// first is always used for encryption; the second follows the requested
-    /// data direction.
+    /// data direction. Constant time.
     pub const fn new(hash_cipher: C, main_cipher: C) -> Self {
         Self {
             hash_cipher,
@@ -280,6 +288,8 @@ impl<C: BlockCipher> OcbBlockCipher<C> {
 }
 
 impl<C: Display> Display for OcbBlockCipher<C> {
+    /// Writes the cipher's name followed by `/OCB`. Constant time: no key
+    /// material is inspected.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.main_cipher.fmt(f)?;
         f.write_str("/OCB")
@@ -293,6 +303,8 @@ where
 {
     type Error = AeadError<C::Error>;
 
+    /// Buffers `input` as associated data until `do_final`. Constant time: only
+    /// its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.direction()?;
         if self.data_started {
@@ -303,6 +315,8 @@ where
         Ok(())
     }
 
+    /// Buffers `input` until `do_final` and writes nothing. Constant time: only
+    /// its length decides the work.
     fn process_bytes(&mut self, input: &[u8], _output: &mut [u8]) -> Result<usize, Self::Error> {
         self.direction()?;
         self.data
@@ -315,6 +329,9 @@ where
         Ok(0)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time exactly when the cipher is: the tag is compared in fixed
+    /// time, and only the result reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         let required = self.required_output(0)?;
@@ -334,10 +351,14 @@ where
         result
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| &mac[..self.mac_size])
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.state = match self.state {
@@ -355,10 +376,14 @@ where
         self.clear_packet();
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, _input_len: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.required_output(input_len)
     }
@@ -371,6 +396,7 @@ where
 {
     type Cipher = C;
 
+    /// Returns the wrapped block cipher. Constant time.
     fn underlying_cipher(&self) -> &Self::Cipher {
         &self.main_cipher
     }
@@ -384,6 +410,10 @@ where
 {
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
+    /// Keys the cipher and starts a message, as described on
+    /// `AeadCipherInit::init`. Constant time exactly when the cipher's key
+    /// setup and block encryption are: validation reads only public lengths,
+    /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

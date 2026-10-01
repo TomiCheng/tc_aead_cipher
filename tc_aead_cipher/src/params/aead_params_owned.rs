@@ -12,6 +12,8 @@ use tc_zeroize::{Zeroize, ZeroizeOnDrop};
 /// Available with the `alloc` feature. Construction takes the vectors without
 /// copying them, and this type does not validate any value. The consuming AEAD
 /// construction owns all key, nonce, and authentication-tag length policy.
+///
+/// Constant time: no method inspects the key, nonce or associated data.
 pub struct AeadParamsOwned {
     key: Vec<u8>,
     nonce: Vec<u8>,
@@ -21,6 +23,7 @@ pub struct AeadParamsOwned {
 
 impl AeadParamsOwned {
     /// Takes ownership of all byte vectors and selects a MAC size in bytes.
+    /// Constant time.
     pub const fn new(key: Vec<u8>, nonce: Vec<u8>, mac_size: usize, initial_aad: Vec<u8>) -> Self {
         Self {
             key,
@@ -32,30 +35,36 @@ impl AeadParamsOwned {
 }
 
 impl KeyParams for AeadParamsOwned {
+    /// Returns the key. Constant time: the bytes are not inspected.
     fn key(&self) -> &[u8] {
         &self.key
     }
 }
 
 impl NonceParams for AeadParamsOwned {
+    /// Returns the nonce. Constant time: the bytes are not inspected.
     fn nonce(&self) -> &[u8] {
         &self.nonce
     }
 }
 
 impl InitialAadParams for AeadParamsOwned {
+    /// Returns the initial associated data. Constant time: the bytes are not
+    /// inspected.
     fn initial_aad(&self) -> &[u8] {
         &self.initial_aad
     }
 }
 
 impl MacSizeParams for AeadParamsOwned {
+    /// Returns the tag size in bytes. Constant time.
     fn mac_size(&self) -> usize {
         self.mac_size
     }
 }
 
 impl fmt::Debug for AeadParamsOwned {
+    /// Writes the lengths and the tag size, never the bytes. Constant time.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AeadParamsOwned")
             .field("key_len", &self.key.len())

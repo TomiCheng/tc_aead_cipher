@@ -22,7 +22,7 @@ pub enum SparkleVariant {
 }
 
 impl SparkleVariant {
-    /// Returns the required key length in bytes.
+    /// Returns the required key length in bytes. Constant time.
     pub const fn key_bytes(self) -> usize {
         match self {
             Self::Schwaemm128_128 | Self::Schwaemm256_128 => BYTES_128,
@@ -31,7 +31,7 @@ impl SparkleVariant {
         }
     }
 
-    /// Returns the required nonce length in bytes.
+    /// Returns the required nonce length in bytes. Constant time.
     pub const fn nonce_bytes(self) -> usize {
         match self {
             Self::Schwaemm128_128 => BYTES_128,
@@ -40,7 +40,7 @@ impl SparkleVariant {
         }
     }
 
-    /// Returns the authentication-tag length in bytes.
+    /// Returns the authentication-tag length in bytes. Constant time.
     pub const fn tag_bytes(self) -> usize {
         self.key_bytes()
     }
@@ -70,6 +70,7 @@ impl SparkleVariant {
 }
 
 impl Display for SparkleVariant {
+    /// Writes the variant's name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Schwaemm128_128 => f.write_str("SCHWAEMM128-128"),

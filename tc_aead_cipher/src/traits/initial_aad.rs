@@ -5,5 +5,8 @@ pub trait InitialAadParams {
     /// Returns the associated data `init` absorbs, empty for none. It stays
     /// part of every message that [`AeadCipher::reset`](crate::AeadCipher::reset)
     /// restarts.
+    ///
+    /// Constant time in this crate's containers, which return their value
+    /// without inspecting it; other implementations define their own timing.
     fn initial_aad(&self) -> &[u8];
 }

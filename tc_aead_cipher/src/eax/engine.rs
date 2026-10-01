@@ -105,6 +105,10 @@ impl CmacState {
 /// One cipher instance is shared by the internal CTR and CMAC states, so `C`
 /// does not need to implement `Clone` and no additional cipher factory trait is
 /// required.
+///
+/// Constant time exactly when the cipher is: OMAC's subkey doubling and the
+/// counter increment use arithmetic instead of branches, and the tag is
+/// compared in fixed time. Only public lengths decide how much work is done.
 pub struct EaxBlockCipher<C> {
     cipher: C,
     state: State,
@@ -131,7 +135,7 @@ pub struct EaxBlockCipher<C> {
 }
 
 impl<C> EaxBlockCipher<C> {
-    /// Creates an uninitialized EAX engine around `cipher`.
+    /// Creates an uninitialized EAX engine around `cipher`. Constant time.
     pub const fn new(cipher: C) -> Self {
         Self {
             cipher,
@@ -308,6 +312,8 @@ impl<C: BlockCipher> EaxBlockCipher<C> {
 }
 
 impl<C: Display> Display for EaxBlockCipher<C> {
+    /// Writes the cipher's name followed by `/EAX`. Constant time: no key
+    /// material is inspected.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.cipher.fmt(f)?;
         f.write_str("/EAX")
@@ -321,6 +327,8 @@ where
 {
     type Error = AeadError<C::Error>;
 
+    /// Authenticates `input` as associated data. Constant time exactly when the
+    /// cipher is: only its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.direction()?;
         if self.data_started {
@@ -332,6 +340,9 @@ where
             .map_err(AeadError::Cipher)
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time exactly when the cipher is: only the input length decides
+    /// the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         let required = self.update_output_len(input.len())?;
@@ -360,6 +371,9 @@ where
         Ok(written)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time exactly when the cipher is: the tag is compared in fixed
+    /// time, and only the result reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         self.mac = None;
@@ -430,10 +444,14 @@ where
         result
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| &mac[..self.mac_size])
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.state = match self.state {
@@ -449,6 +467,8 @@ where
         self.reset_packet(true);
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let mut total = self
             .buffer_pos
@@ -460,6 +480,8 @@ where
         Ok(total - total % self.block_size.max(1))
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let total = self
             .buffer_pos
@@ -482,6 +504,7 @@ where
 {
     type Cipher = C;
 
+    /// Returns the wrapped block cipher. Constant time.
     fn underlying_cipher(&self) -> &Self::Cipher {
         &self.cipher
     }
@@ -495,6 +518,10 @@ where
 {
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
+    /// Keys the cipher and starts a message, as described on
+    /// `AeadCipherInit::init`. Constant time exactly when the cipher's key
+    /// setup and block encryption are: validation reads only public lengths,
+    /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

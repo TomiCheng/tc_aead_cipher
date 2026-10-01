@@ -29,6 +29,14 @@ enum State {
 /// This packet construction buffers all AAD and message bytes until
 /// finalization. Its POLYVAL implementation is private and portable; no
 /// multiplier or exponentiator strategy is part of the public API.
+///
+/// Constant time exactly when the cipher is: POLYVAL multiplies bit by bit with
+/// masks, and neither the counter increment nor the tag comparison branches on
+/// data. Only public lengths decide how much work is done.
+///
+/// The buffers are `Vec`s, wiped when cleared and on drop. A `Vec` that grows,
+/// though, frees its previous allocation without wiping it, so copies of
+/// earlier bytes can remain in freed memory until it is reused.
 pub struct GcmSivBlockCipher<C> {
     cipher: C,
     state: State,
@@ -42,7 +50,7 @@ pub struct GcmSivBlockCipher<C> {
 }
 
 impl<C> GcmSivBlockCipher<C> {
-    /// Creates an uninitialized GCM-SIV engine around `cipher`.
+    /// Creates an uninitialized GCM-SIV engine around `cipher`. Constant time.
     pub const fn new(cipher: C) -> Self {
         Self {
             cipher,
@@ -221,6 +229,8 @@ impl<C> Display for GcmSivBlockCipher<C>
 where
     C: Display,
 {
+    /// Writes the cipher's name followed by `/GCM-SIV`. Constant time: no key
+    /// material is inspected.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.cipher.fmt(f)?;
         f.write_str("/GCM-SIV")
@@ -234,6 +244,8 @@ where
 {
     type Error = AeadError<C::Error>;
 
+    /// Buffers `input` as associated data until `do_final`. Constant time: only
+    /// its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.direction()?;
         if self.data_started {
@@ -245,6 +257,8 @@ where
         Ok(())
     }
 
+    /// Buffers `input` until `do_final` and writes nothing. Constant time: only
+    /// its length decides the work.
     fn process_bytes(&mut self, input: &[u8], _output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         let tag_bytes = usize::from(direction == CipherDirection::Decrypt) * MAC_BYTES;
@@ -257,6 +271,9 @@ where
         Ok(0)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time exactly when the cipher is: the tag is compared in fixed
+    /// time, and only the result reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         self.mac = None;
@@ -279,19 +296,27 @@ where
         result
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(<[u8; MAC_BYTES]>::as_slice)
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.clear_packet();
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, _input_len: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.output_size(input_len)
     }
@@ -304,6 +329,7 @@ where
 {
     type Cipher = C;
 
+    /// Returns the wrapped block cipher. Constant time.
     fn underlying_cipher(&self) -> &Self::Cipher {
         &self.cipher
     }
@@ -318,6 +344,10 @@ where
 {
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
+    /// Keys the cipher, derives the message keys from the nonce and starts a
+    /// message, as described on `AeadCipherInit::init`. Constant time exactly
+    /// when the cipher's key setup and block encryption are: validation reads
+    /// only public lengths.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;

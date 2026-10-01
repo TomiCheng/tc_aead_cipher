@@ -9,6 +9,12 @@ use tc_block_cipher::CipherDirection;
 /// encrypted nor written to the output. Encryption appends the tag to the
 /// ciphertext; decryption expects it at the end of the input and verifies it
 /// in `do_final`.
+///
+/// Each engine documents its timing. Lengths are public throughout: the
+/// lengths of the message, the associated data and the nonce, and the tag
+/// size, decide how much work is done, and the result of a tag check shows in
+/// the outcome. A construction over a block cipher is constant time exactly
+/// when that cipher is.
 pub trait AeadCipher {
     /// The error returned while processing a message. Engines over a block
     /// cipher report the cipher's own failures through

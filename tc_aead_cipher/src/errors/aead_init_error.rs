@@ -51,6 +51,8 @@ pub enum AeadInitError<E = Infallible> {
 }
 
 impl<E> Display for AeadInitError<E> {
+    /// Writes a short description of the error; the cipher's error is reachable
+    /// through `source`. Constant time: the fields hold only public lengths.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidKeyLength { actual } => {
@@ -85,6 +87,8 @@ impl<E> Display for AeadInitError<E> {
 }
 
 impl<E: Error + 'static> Error for AeadInitError<E> {
+    /// Returns the underlying cipher's error for `Cipher`, and `None`
+    /// otherwise. Constant time.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Cipher(error) => Some(error),

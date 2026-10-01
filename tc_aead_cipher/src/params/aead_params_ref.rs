@@ -8,6 +8,8 @@ use tc_block_cipher::KeyParams;
 ///
 /// This type does not validate any value. The consuming AEAD construction
 /// owns all key, nonce, and authentication-tag length policy.
+///
+/// Constant time: no method inspects the key, nonce or associated data.
 #[derive(Clone, Copy)]
 pub struct AeadParamsRef<'a> {
     key: &'a [u8],
@@ -17,7 +19,7 @@ pub struct AeadParamsRef<'a> {
 }
 
 impl<'a> AeadParamsRef<'a> {
-    /// Borrows all byte slices and selects a MAC size in bytes.
+    /// Borrows all byte slices and selects a MAC size in bytes. Constant time.
     pub const fn new(
         key: &'a [u8],
         nonce: &'a [u8],
@@ -34,30 +36,36 @@ impl<'a> AeadParamsRef<'a> {
 }
 
 impl KeyParams for AeadParamsRef<'_> {
+    /// Returns the key. Constant time: the bytes are not inspected.
     fn key(&self) -> &[u8] {
         self.key
     }
 }
 
 impl NonceParams for AeadParamsRef<'_> {
+    /// Returns the nonce. Constant time: the bytes are not inspected.
     fn nonce(&self) -> &[u8] {
         self.nonce
     }
 }
 
 impl InitialAadParams for AeadParamsRef<'_> {
+    /// Returns the initial associated data. Constant time: the bytes are not
+    /// inspected.
     fn initial_aad(&self) -> &[u8] {
         self.initial_aad
     }
 }
 
 impl MacSizeParams for AeadParamsRef<'_> {
+    /// Returns the tag size in bytes. Constant time.
     fn mac_size(&self) -> usize {
         self.mac_size
     }
 }
 
 impl fmt::Debug for AeadParamsRef<'_> {
+    /// Writes the lengths and the tag size, never the bytes. Constant time.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AeadParamsRef")
             .field("key_len", &self.key.len())

@@ -451,6 +451,8 @@ impl<B> Drop for Inner<B> {
 impl<B: AadBuffer> AeadCipher for Inner<B> {
     type Error = AeadError;
 
+    /// Holds `input` as associated data until the message starts.
+    /// Constant time: only its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         if input.is_empty() {
             return Ok(());
@@ -465,6 +467,8 @@ impl<B: AadBuffer> AeadCipher for Inner<B> {
             })
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.update_output_len(input.len())?;
@@ -502,6 +506,9 @@ impl<B: AadBuffer> AeadCipher for Inner<B> {
         }
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.output_len(0)?;
@@ -543,10 +550,14 @@ impl<B: AadBuffer> AeadCipher for Inner<B> {
         }
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| mac.as_slice())
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.tag_buffer.zeroize();
@@ -567,6 +578,8 @@ impl<B: AadBuffer> AeadCipher for Inner<B> {
         }
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         Ok(match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(TAG_BYTES),
@@ -579,6 +592,8 @@ impl<B: AadBuffer> AeadCipher for Inner<B> {
         })
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         Ok(match self.state {
             State::DecryptInit | State::DecryptAad => input_len.saturating_sub(TAG_BYTES),
@@ -601,6 +616,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;
@@ -663,6 +681,17 @@ where
 ///
 /// This type is available with the `alloc` feature and accepts AAD of
 /// any length supported by the allocator.
+///
+/// Constant time: the shift registers and the authentication accumulator are
+/// updated with shifts and masks, never with branches on key, nonce or message
+/// bits, and the tag is compared in fixed time. Only public lengths decide how
+/// much work is done.
+///
+/// Grain-128AEAD encodes the length of the associated data before the data
+/// itself, so this engine holds the associated data in a `Vec` until the
+/// message starts. The `Vec` is wiped when cleared and on drop, but when it
+/// grows it frees its previous allocation without wiping it;
+/// `FixedGrain128AeadEngine` avoids the heap.
 #[cfg(feature = "alloc")]
 pub struct Grain128AeadEngine {
     inner: Inner<Vec<u8>>,
@@ -670,24 +699,24 @@ pub struct Grain128AeadEngine {
 
 #[cfg(feature = "alloc")]
 impl Grain128AeadEngine {
-    /// Creates an uninitialized Grain-128AEAD engine.
+    /// Creates an uninitialized Grain-128AEAD engine. Constant time.
     pub const fn new() -> Self {
         Self {
             inner: Inner::new(Vec::new(), Vec::new()),
         }
     }
 
-    /// Returns the required key length in bytes.
+    /// Returns the required key length in bytes. Constant time.
     pub const fn key_bytes(&self) -> usize {
         self.inner.key_bytes()
     }
 
-    /// Returns the required nonce length in bytes.
+    /// Returns the required nonce length in bytes. Constant time.
     pub const fn nonce_bytes(&self) -> usize {
         self.inner.nonce_bytes()
     }
 
-    /// Returns the authentication-tag length in bytes.
+    /// Returns the authentication-tag length in bytes. Constant time.
     pub const fn tag_bytes(&self) -> usize {
         self.inner.tag_bytes()
     }
@@ -695,6 +724,7 @@ impl Grain128AeadEngine {
 
 #[cfg(feature = "alloc")]
 impl Default for Grain128AeadEngine {
+    /// Same as [`new`](Self::new). Constant time.
     fn default() -> Self {
         Self::new()
     }
@@ -702,6 +732,7 @@ impl Default for Grain128AeadEngine {
 
 #[cfg(feature = "alloc")]
 impl Display for Grain128AeadEngine {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Grain-128AEAD")
     }
@@ -711,30 +742,45 @@ impl Display for Grain128AeadEngine {
 impl AeadCipher for Grain128AeadEngine {
     type Error = AeadError;
 
+    /// Holds `input` as associated data until the message starts.
+    /// Constant time: only its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.inner.process_aad_bytes(input)
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         self.inner.process_bytes(input, output)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         self.inner.do_final(output)
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.inner.mac()
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.inner.reset();
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.inner.update_output_len(input_len)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.inner.output_len(input_len)
     }
@@ -747,6 +793,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.inner.init(direction, params)
     }
@@ -756,46 +805,53 @@ where
 ///
 /// `MAX_AAD_LEN` is the maximum amount of AAD that can be buffered for one
 /// operation. It is a capacity, not the exact AAD length.
+///
+/// Constant time: the shift registers and the authentication accumulator are
+/// updated with shifts and masks, never with branches on key, nonce or message
+/// bits, and the tag is compared in fixed time. Only public lengths decide how
+/// much work is done.
 pub struct FixedGrain128AeadEngine<const MAX_AAD_LEN: usize> {
     inner: Inner<FixedAadBuffer<MAX_AAD_LEN>>,
 }
 
 impl<const MAX_AAD_LEN: usize> FixedGrain128AeadEngine<MAX_AAD_LEN> {
-    /// Creates an uninitialized Grain-128AEAD engine.
+    /// Creates an uninitialized Grain-128AEAD engine. Constant time.
     pub const fn new() -> Self {
         Self {
             inner: Inner::new(FixedAadBuffer::new(), FixedAadBuffer::new()),
         }
     }
 
-    /// Returns the AAD buffer capacity in bytes.
+    /// Returns the AAD buffer capacity in bytes. Constant time.
     pub const fn max_aad_len(&self) -> usize {
         MAX_AAD_LEN
     }
 
-    /// Returns the required key length in bytes.
+    /// Returns the required key length in bytes. Constant time.
     pub const fn key_bytes(&self) -> usize {
         self.inner.key_bytes()
     }
 
-    /// Returns the required nonce length in bytes.
+    /// Returns the required nonce length in bytes. Constant time.
     pub const fn nonce_bytes(&self) -> usize {
         self.inner.nonce_bytes()
     }
 
-    /// Returns the authentication-tag length in bytes.
+    /// Returns the authentication-tag length in bytes. Constant time.
     pub const fn tag_bytes(&self) -> usize {
         self.inner.tag_bytes()
     }
 }
 
 impl<const MAX_AAD_LEN: usize> Default for FixedGrain128AeadEngine<MAX_AAD_LEN> {
+    /// Same as [`new`](Self::new). Constant time.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl<const MAX_AAD_LEN: usize> Display for FixedGrain128AeadEngine<MAX_AAD_LEN> {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str("Grain-128AEAD")
     }
@@ -804,30 +860,45 @@ impl<const MAX_AAD_LEN: usize> Display for FixedGrain128AeadEngine<MAX_AAD_LEN> 
 impl<const MAX_AAD_LEN: usize> AeadCipher for FixedGrain128AeadEngine<MAX_AAD_LEN> {
     type Error = AeadError;
 
+    /// Holds `input` as associated data until the message starts.
+    /// Constant time: only its length decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         self.inner.process_aad_bytes(input)
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         self.inner.process_bytes(input, output)
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         self.inner.do_final(output)
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.inner.mac()
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.inner.reset();
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.inner.update_output_len(input_len)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         self.inner.output_len(input_len)
     }
@@ -839,6 +910,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.inner.init(direction, params)
     }

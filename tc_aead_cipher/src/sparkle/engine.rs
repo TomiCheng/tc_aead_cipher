@@ -47,6 +47,10 @@ enum State {
 /// Decryption may emit unauthenticated plaintext before
 /// [`AeadCipher::do_final`] verifies the tag. Callers must not release that
 /// plaintext before finalization succeeds.
+///
+/// Constant time: SPARKLE is an ARX permutation of additions, rotations and
+/// XORs on 32-bit words, its SSE2 form on x86 does the same work, and the tag
+/// is compared in fixed time. Only public lengths decide how much work is done.
 pub struct SparkleEngine {
     variant: SparkleVariant,
     buffer: [u8; MAX_BUFFER_BYTES],
@@ -64,7 +68,7 @@ pub struct SparkleEngine {
 }
 
 impl SparkleEngine {
-    /// Creates an uninitialized engine for `variant`.
+    /// Creates an uninitialized engine for `variant`. Constant time.
     pub const fn new(variant: SparkleVariant) -> Self {
         Self {
             variant,
@@ -91,22 +95,22 @@ impl SparkleEngine {
         self.encrypted = false;
     }
 
-    /// Returns the selected SCHWAEMM parameter set.
+    /// Returns the selected SCHWAEMM parameter set. Constant time.
     pub const fn variant(&self) -> SparkleVariant {
         self.variant
     }
 
-    /// Returns the required key length in bytes.
+    /// Returns the required key length in bytes. Constant time.
     pub const fn key_bytes(&self) -> usize {
         self.variant.key_bytes()
     }
 
-    /// Returns the required nonce length in bytes.
+    /// Returns the required nonce length in bytes. Constant time.
     pub const fn nonce_bytes(&self) -> usize {
         self.variant.nonce_bytes()
     }
 
-    /// Returns the authentication-tag length in bytes.
+    /// Returns the authentication-tag length in bytes. Constant time.
     pub const fn tag_bytes(&self) -> usize {
         self.variant.tag_bytes()
     }
@@ -458,6 +462,7 @@ impl Drop for SparkleEngine {
 }
 
 impl Display for SparkleEngine {
+    /// Writes the algorithm name. Constant time.
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         Display::fmt(&self.variant, f)
     }
@@ -466,6 +471,8 @@ impl Display for SparkleEngine {
 impl AeadCipher for SparkleEngine {
     type Error = AeadError;
 
+    /// Absorbs `input` as associated data. Constant time: only its length
+    /// decides the work.
     fn process_aad_bytes(&mut self, input: &[u8]) -> Result<(), Self::Error> {
         if input.is_empty() {
             return Ok(());
@@ -476,6 +483,8 @@ impl AeadCipher for SparkleEngine {
         Ok(())
     }
 
+    /// Encrypts or decrypts the input that is ready and holds back the rest.
+    /// Constant time: only the input length decides the work.
     fn process_bytes(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.update_output_len(input.len())?;
@@ -495,6 +504,9 @@ impl AeadCipher for SparkleEngine {
         })
     }
 
+    /// Processes the rest of the message and appends or verifies the tag.
+    /// Constant time: the tag is compared in fixed time, and only the result
+    /// reveals whether it matched.
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.current_direction()?;
         let required = self.output_len(0)?;
@@ -551,10 +563,14 @@ impl AeadCipher for SparkleEngine {
         }
     }
 
+    /// Returns the tag of the last successful `do_final`. Constant time.
     fn mac(&self) -> Option<&[u8]> {
         self.mac.as_ref().map(|mac| &mac[..self.tag_bytes()])
     }
 
+    /// Restarts the message when the nonce allows, as described on
+    /// `AeadCipher::reset`. Constant time: it restores fixed-size state and
+    /// wipes the buffers.
     fn reset(&mut self) {
         self.mac = None;
         self.buffer.zeroize();
@@ -571,6 +587,8 @@ impl AeadCipher for SparkleEngine {
         }
     }
 
+    /// Returns the length the next `process_bytes` writes. Constant time:
+    /// depends only on public lengths.
     fn update_output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let tag_bytes = self.tag_bytes();
         let total = match self.state {
@@ -593,6 +611,8 @@ impl AeadCipher for SparkleEngine {
         Ok(total - total % rate)
     }
 
+    /// Returns the length `process_bytes` and `do_final` write together.
+    /// Constant time: depends only on public lengths.
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
         let tag_bytes = self.tag_bytes();
         Ok(match self.state {
@@ -620,6 +640,9 @@ where
 {
     type Error = AeadInitError;
 
+    /// Loads the key and nonce, runs the initialization and absorbs any initial
+    /// associated data. Constant time: lengths are checked against public
+    /// sizes, and the state is set up without data-dependent branches.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
         self.state = State::Uninitialized;
         self.mac = None;
