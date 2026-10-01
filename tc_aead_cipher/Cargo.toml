@@ -13,8 +13,12 @@ alloc = ["tc_zeroize/alloc"]
 [dependencies]
 tc_block_cipher = "0.1.0"
 tc_constant_time = "0.1.0"
-tc_runtime = "0.1.0"
 tc_zeroize = "0.1.0"
+
+# Sparkle's SSE2 permutation is the only hardware backend, so other targets
+# do not need run-time detection.
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+tc_runtime = "0.1.0"
 
 [dev-dependencies]
 tc_aes = "0.1.0"
