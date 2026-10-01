@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::fmt::{Display, Formatter};
 use tc_constant_time::fixed_time_eq;
+use tc_zeroize::Zeroize;
 
 use tc_block_cipher::{BlockCipher, BlockCipherInit, CipherDirection, KeyParams};
 
@@ -17,10 +18,10 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum State {
     #[default]
-    Uninitialised,
+    Uninitialized,
     Encrypt,
     Decrypt,
-    Finalised(CipherDirection),
+    Finalized(CipherDirection),
 }
 
 /// OCB3 authenticated encryption over two instances of the same block cipher.
@@ -43,7 +44,7 @@ pub struct OcbBlockCipher<C> {
     aad: Vec<u8>,
     initial_aad_len: usize,
     data: Vec<u8>,
-    last_key: Vec<u8>,
+    key_check: [u8; BLOCK_BYTES],
     last_nonce: [u8; MAX_NONCE_BYTES],
     last_nonce_len: usize,
     has_key_nonce: bool,
@@ -60,7 +61,7 @@ impl<C> OcbBlockCipher<C> {
         Self {
             hash_cipher,
             main_cipher,
-            state: State::Uninitialised,
+            state: State::Uninitialized,
             data_started: false,
             mac_size: 0,
             nonce: [0; MAX_NONCE_BYTES],
@@ -72,7 +73,7 @@ impl<C> OcbBlockCipher<C> {
             aad: Vec::new(),
             initial_aad_len: 0,
             data: Vec::new(),
-            last_key: Vec::new(),
+            key_check: [0; BLOCK_BYTES],
             last_nonce: [0; MAX_NONCE_BYTES],
             last_nonce_len: 0,
             has_key_nonce: false,
@@ -84,24 +85,29 @@ impl<C> OcbBlockCipher<C> {
         match self.state {
             State::Encrypt => Ok(CipherDirection::Encrypt),
             State::Decrypt => Ok(CipherDirection::Decrypt),
-            State::Finalised(_) => Err(AeadError::AlreadyFinalized),
-            State::Uninitialised => Err(AeadError::NotInitialized),
+            State::Finalized(_) => Err(AeadError::AlreadyFinalized),
+            State::Uninitialized => Err(AeadError::NotInitialized),
         }
     }
 
-    fn required_output(&self, additional: usize) -> usize {
-        let total = self.data.len().saturating_add(additional);
-        match self.state {
+    fn required_output<E>(&self, additional: usize) -> Result<usize, AeadError<E>> {
+        let total = self
+            .data
+            .len()
+            .checked_add(additional)
+            .ok_or(AeadError::InputTooLong)?;
+        Ok(match self.state {
             State::Decrypt => total.saturating_sub(self.mac_size),
-            _ => total.saturating_add(self.mac_size),
-        }
+            _ => total
+                .checked_add(self.mac_size)
+                .ok_or(AeadError::InputTooLong)?,
+        })
     }
 
     fn clear_packet(&mut self) {
-        self.aad[self.initial_aad_len..].fill(0);
+        self.aad[self.initial_aad_len..].zeroize();
         self.aad.truncate(self.initial_aad_len);
-        self.data.fill(0);
-        self.data.clear();
+        self.data.zeroize();
         self.data_started = false;
     }
 }
@@ -311,7 +317,7 @@ where
 
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
-        let required = self.required_output(0);
+        let required = self.required_output(0)?;
         if output.len() < required {
             return Err(AeadError::OutputTooShort {
                 required,
@@ -323,7 +329,7 @@ where
             CipherDirection::Encrypt => self.encrypt_packet(output),
             CipherDirection::Decrypt => self.decrypt_packet(output),
         };
-        self.state = State::Finalised(direction);
+        self.state = State::Finalized(direction);
         self.clear_packet();
         result
     }
@@ -336,11 +342,11 @@ where
         self.mac = None;
         self.state = match self.state {
             State::Encrypt => State::Encrypt,
-            State::Decrypt | State::Finalised(CipherDirection::Decrypt) => State::Decrypt,
-            State::Finalised(CipherDirection::Encrypt) => {
-                State::Finalised(CipherDirection::Encrypt)
+            State::Decrypt | State::Finalized(CipherDirection::Decrypt) => State::Decrypt,
+            State::Finalized(CipherDirection::Encrypt) => {
+                State::Finalized(CipherDirection::Encrypt)
             }
-            State::Uninitialised => {
+            State::Uninitialized => {
                 self.initial_aad_len = 0;
                 self.clear_packet();
                 return;
@@ -354,7 +360,7 @@ where
     }
 
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
-        Ok(self.required_output(input_len))
+        self.required_output(input_len)
     }
 }
 
@@ -379,6 +385,11 @@ where
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
+        self.state = State::Uninitialized;
+        self.mac = None;
+        self.initial_aad_len = 0;
+        self.clear_packet();
+
         if self.hash_cipher.block_size() != BLOCK_BYTES
             || self.main_cipher.block_size() != BLOCK_BYTES
         {
@@ -397,15 +408,6 @@ where
         if !(MIN_MAC_BYTES..=MAX_MAC_BYTES).contains(&mac_size) {
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
-        let key = params.key();
-        if direction == CipherDirection::Encrypt
-            && self.has_key_nonce
-            && self.last_key == key
-            && self.last_nonce_len == nonce.len()
-            && self.last_nonce[..self.last_nonce_len] == *nonce
-        {
-            return Err(AeadInitError::NonceReuse);
-        }
 
         self.hash_cipher
             .init(CipherDirection::Encrypt, params)
@@ -413,20 +415,33 @@ where
         self.main_cipher
             .init(direction, params)
             .map_err(AeadInitError::Cipher)?;
+        // The cipher was just keyed with a 16-byte block size, so encrypting
+        // a block can fail only if the cipher breaks its own contract. E_K(0)
+        // is L_*, which OCB derives from the key anyway.
+        let mut key_check = self
+            .encrypt_hash_block(&[0u8; BLOCK_BYTES])
+            .map_err(|_| AeadInitError::InternalFailure)?;
+
+        // Reuse means the same key and nonce. E_K(0) stands for the key without
+        // keeping a copy of it; the nonce is public, so only the key check
+        // needs a fixed-time comparison.
+        let reused = self.has_key_nonce
+            && self.last_nonce[..self.last_nonce_len] == *nonce
+            && fixed_time_eq(&key_check, &self.key_check);
+        if direction == CipherDirection::Encrypt && reused {
+            key_check.zeroize();
+            return Err(AeadInitError::NonceReuse);
+        }
 
         self.mac_size = mac_size;
         self.nonce.fill(0);
         self.nonce[..nonce.len()].copy_from_slice(nonce);
         self.nonce_len = nonce.len();
 
-        self.initial_aad_len = 0;
-        self.clear_packet();
         self.aad.extend_from_slice(params.initial_aad());
         self.initial_aad_len = self.aad.len();
-        self.mac = None;
-        self.last_key.fill(0);
-        self.last_key.clear();
-        self.last_key.extend_from_slice(key);
+        self.key_check = key_check;
+        key_check.zeroize();
         self.last_nonce.fill(0);
         self.last_nonce[..nonce.len()].copy_from_slice(nonce);
         self.last_nonce_len = nonce.len();
@@ -436,6 +451,19 @@ where
             CipherDirection::Decrypt => State::Decrypt,
         };
         Ok(())
+    }
+}
+
+impl<C> Drop for OcbBlockCipher<C> {
+    fn drop(&mut self) {
+        self.offset_main_0.zeroize();
+        self.l_star.zeroize();
+        self.l_dollar.zeroize();
+        self.l_zero.zeroize();
+        self.aad.zeroize();
+        self.data.zeroize();
+        self.key_check.zeroize();
+        self.mac.zeroize();
     }
 }
 

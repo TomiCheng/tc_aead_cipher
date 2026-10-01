@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::fmt::{Display, Formatter};
 use tc_constant_time::fixed_time_eq;
+use tc_zeroize::Zeroize;
 
 use tc_block_cipher::{BlockCipher, BlockCipherInit, CipherDirection, KeyParams, KeyRef};
 
@@ -18,7 +19,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum State {
     #[default]
-    Uninitialised,
+    Uninitialized,
     Encrypt,
     Decrypt,
 }
@@ -45,7 +46,7 @@ impl<C> GcmSivBlockCipher<C> {
     pub const fn new(cipher: C) -> Self {
         Self {
             cipher,
-            state: State::Uninitialised,
+            state: State::Uninitialized,
             auth_key: [0; BLOCK_BYTES],
             nonce: [0; NONCE_BYTES],
             aad: Vec::new(),
@@ -60,23 +61,28 @@ impl<C> GcmSivBlockCipher<C> {
         match self.state {
             State::Encrypt => Ok(CipherDirection::Encrypt),
             State::Decrypt => Ok(CipherDirection::Decrypt),
-            State::Uninitialised => Err(AeadError::NotInitialized),
+            State::Uninitialized => Err(AeadError::NotInitialized),
         }
     }
 
-    fn output_size(&self, additional: usize) -> usize {
-        let total = self.data.len().saturating_add(additional);
-        match self.state {
+    fn output_size<E>(&self, additional: usize) -> Result<usize, AeadError<E>> {
+        let total = self
+            .data
+            .len()
+            .checked_add(additional)
+            .ok_or(AeadError::InputTooLong)?;
+        Ok(match self.state {
             State::Decrypt => total.saturating_sub(MAC_BYTES),
-            _ => total.saturating_add(MAC_BYTES),
-        }
+            _ => total
+                .checked_add(MAC_BYTES)
+                .ok_or(AeadError::InputTooLong)?,
+        })
     }
 
     fn clear_packet(&mut self) {
-        self.aad[self.initial_aad_len..].fill(0);
+        self.aad[self.initial_aad_len..].zeroize();
         self.aad.truncate(self.initial_aad_len);
-        self.data.fill(0);
-        self.data.clear();
+        self.data.zeroize();
         self.data_started = false;
     }
 
@@ -155,7 +161,7 @@ where
             self.mac = Some(tag);
             Ok(plaintext_len + MAC_BYTES)
         })();
-        plaintext.fill(0);
+        plaintext.zeroize();
         result
     }
 
@@ -181,10 +187,10 @@ where
                 self.mac = Some(expected);
                 Ok(plaintext_len)
             })();
-            plaintext.fill(0);
+            plaintext.zeroize();
             result
         })();
-        encrypted.fill(0);
+        encrypted.zeroize();
         result
     }
 
@@ -206,7 +212,7 @@ where
                 enc_key[offset..offset + 8].copy_from_slice(&block[..8]);
             }
         }
-        block.fill(0);
+        block.zeroize();
         Ok((auth_key, enc_key))
     }
 }
@@ -254,7 +260,7 @@ where
     fn do_final(&mut self, output: &mut [u8]) -> Result<usize, Self::Error> {
         let direction = self.direction()?;
         self.mac = None;
-        let required = self.output_size(0);
+        let required = self.output_size(0)?;
         if output.len() < required {
             return Err(AeadError::OutputTooShort {
                 required,
@@ -287,7 +293,7 @@ where
     }
 
     fn output_len(&self, input_len: usize) -> Result<usize, Self::Error> {
-        Ok(self.output_size(input_len))
+        self.output_size(input_len)
     }
 }
 
@@ -313,7 +319,7 @@ where
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
-        self.state = State::Uninitialised;
+        self.state = State::Uninitialized;
         self.mac = None;
         self.clear_packet();
 
@@ -361,11 +367,11 @@ where
             .cipher
             .init(CipherDirection::Encrypt, &derived_params)
             .map_err(AeadInitError::Cipher);
-        enc_key.fill(0);
+        enc_key.zeroize();
         derived_result?;
 
         self.auth_key = auth_key;
-        self.aad.clear();
+        self.aad.zeroize();
         self.aad.extend_from_slice(params.initial_aad());
         self.initial_aad_len = self.aad.len();
         self.state = match direction {
@@ -373,6 +379,15 @@ where
             CipherDirection::Decrypt => State::Decrypt,
         };
         Ok(())
+    }
+}
+
+impl<C> Drop for GcmSivBlockCipher<C> {
+    fn drop(&mut self) {
+        self.auth_key.zeroize();
+        self.aad.zeroize();
+        self.data.zeroize();
+        self.mac.zeroize();
     }
 }
 

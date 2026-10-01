@@ -253,3 +253,61 @@ fn the_message_length_limit_follows_the_nonce_length() {
         Err(AeadError::InputTooLong)
     );
 }
+
+#[test]
+fn the_same_nonce_under_a_different_key_is_not_nonce_reuse() {
+    let nonce = [0x22u8; 12];
+    let first_key = [0x11u8; 16];
+    let second_key = [0x12u8; 16];
+    let first = AeadParamsRef::new(&first_key, &nonce, 8, &[]);
+    let second = AeadParamsRef::new(&second_key, &nonce, 8, &[]);
+    let mut cipher = CcmBlockCipher::new(AesEngine::new());
+    cipher.init(CipherDirection::Encrypt, &first).unwrap();
+    cipher.init(CipherDirection::Encrypt, &second).unwrap();
+    assert!(matches!(
+        cipher.init(CipherDirection::Encrypt, &second),
+        Err(AeadInitError::NonceReuse)
+    ));
+}
+
+#[test]
+fn a_failed_init_leaves_the_engine_uninitialized() {
+    let key = [0x11u8; 16];
+    let nonce = [0x22u8; 12];
+    let mut cipher = CcmBlockCipher::new(AesEngine::new());
+    cipher
+        .init(
+            CipherDirection::Encrypt,
+            &AeadParamsRef::new(&key, &nonce, 8, &[]),
+        )
+        .unwrap();
+    assert!(
+        cipher
+            .init(
+                CipherDirection::Encrypt,
+                &AeadParamsRef::new(&key, &nonce, 5, &[]),
+            )
+            .is_err()
+    );
+    assert!(matches!(
+        cipher.process_bytes(b"data", &mut []),
+        Err(AeadError::NotInitialized)
+    ));
+}
+
+#[test]
+fn an_output_length_beyond_usize_is_reported_as_too_long() {
+    let key = [0x11u8; 16];
+    let nonce = [0x22u8; 12];
+    let mut cipher = CcmBlockCipher::new(AesEngine::new());
+    cipher
+        .init(
+            CipherDirection::Encrypt,
+            &AeadParamsRef::new(&key, &nonce, 8, &[]),
+        )
+        .unwrap();
+    assert!(matches!(
+        cipher.output_len(usize::MAX),
+        Err(AeadError::InputTooLong)
+    ));
+}

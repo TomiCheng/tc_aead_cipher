@@ -15,7 +15,7 @@ const MAX_BUFFER_BYTES: usize = MAX_BLOCK_BYTES * 2;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum State {
     #[default]
-    Uninitialised,
+    Uninitialized,
     Encrypt,
     Decrypt,
     Finalized(CipherDirection),
@@ -135,7 +135,7 @@ impl<C> EaxBlockCipher<C> {
     pub const fn new(cipher: C) -> Self {
         Self {
             cipher,
-            state: State::Uninitialised,
+            state: State::Uninitialized,
             block_size: 0,
             mac_size: 0,
             k1: [0; MAX_BLOCK_BYTES],
@@ -174,7 +174,7 @@ impl<C> EaxBlockCipher<C> {
             State::Encrypt => Ok(CipherDirection::Encrypt),
             State::Decrypt => Ok(CipherDirection::Decrypt),
             State::Finalized(_) => Err(AeadError::AlreadyFinalized),
-            State::Uninitialised => Err(AeadError::NotInitialized),
+            State::Uninitialized => Err(AeadError::NotInitialized),
         }
     }
 
@@ -444,7 +444,7 @@ where
             State::Finalized(CipherDirection::Encrypt) => {
                 State::Finalized(CipherDirection::Encrypt)
             }
-            State::Uninitialised => return,
+            State::Uninitialized => return,
         };
         self.reset_packet(true);
     }
@@ -496,7 +496,7 @@ where
     type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
 
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
-        self.state = State::Uninitialised;
+        self.state = State::Uninitialized;
         self.mac = None;
         let block_size = self.cipher.block_size();
         if !matches!(block_size, 8 | 16) {

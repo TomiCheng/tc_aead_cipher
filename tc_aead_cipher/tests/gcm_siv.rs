@@ -186,3 +186,20 @@ fn the_name_sizes_and_reset_are_reported_and_encryption_is_deterministic() {
     cipher.do_final(&mut second).unwrap();
     assert_eq!(first, second);
 }
+
+#[test]
+fn an_output_length_beyond_usize_is_reported_as_too_long() {
+    let key = [0x11u8; 16];
+    let nonce = [0x22u8; 12];
+    let mut cipher = GcmSivBlockCipher::new(AesEngine::new());
+    cipher
+        .init(
+            CipherDirection::Encrypt,
+            &AeadParamsRef::new(&key, &nonce, 16, &[]),
+        )
+        .unwrap();
+    assert!(matches!(
+        cipher.output_len(usize::MAX),
+        Err(AeadError::InputTooLong)
+    ));
+}
