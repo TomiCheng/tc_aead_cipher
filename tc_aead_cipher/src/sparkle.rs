@@ -1,7 +1,9 @@
 use core::fmt::{Display, Formatter};
 
 mod engine;
+// The SSE2 permutation is the only code in the crate that needs `unsafe`.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(unsafe_code)]
 mod sse2;
 
 pub use engine::SparkleEngine;
