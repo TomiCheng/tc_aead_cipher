@@ -2,7 +2,7 @@
 
 All notable changes to `tc_sparkle_aead` are documented in this file.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-10-01
 
 Initial release.
 
