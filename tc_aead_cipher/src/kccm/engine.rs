@@ -207,7 +207,7 @@ impl<C: BlockCipher, const NB: usize> KccmBlockCipher<C, NB> {
                 output[message_len + index] = raw_mac[index] ^ tag_mask[index];
             }
             let mut mac = [0u8; MAX_MAC_BYTES];
-            mac[..self.mac_size].copy_from_slice(&raw_mac[..self.mac_size]);
+            mac[..self.mac_size].copy_from_slice(&output[message_len..message_len + self.mac_size]);
             self.mac = Some(mac);
             Ok(message_len + self.mac_size)
         })();
@@ -238,7 +238,7 @@ impl<C: BlockCipher, const NB: usize> KccmBlockCipher<C, NB> {
             }
             output[..message_len].copy_from_slice(&plaintext);
             let mut mac = [0u8; MAX_MAC_BYTES];
-            mac[..self.mac_size].copy_from_slice(&raw_mac[..self.mac_size]);
+            mac[..self.mac_size].copy_from_slice(&data[message_len..message_len + self.mac_size]);
             self.mac = Some(mac);
             Ok(message_len)
         })();

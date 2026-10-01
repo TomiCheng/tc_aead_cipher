@@ -42,6 +42,9 @@ where
     let plaintext = decode(vector.plaintext);
     let expected_mac = decode(vector.expected_mac);
     let expected = decode(vector.expected);
+    // The vectors list Bouncy Castle's MAC before it is masked. mac() reports
+    // the tag that ends the ciphertext instead.
+    let tag = &expected[expected.len() - expected_mac.len()..];
     let params = AeadParamsRef::new(&key, &nonce, expected_mac.len(), &aad);
 
     let mut encryptor = KccmBlockCipher::<_, NB>::with_nb(cipher);
@@ -50,7 +53,7 @@ where
     let mut ciphertext = vec![0u8; expected.len()];
     assert_eq!(encryptor.do_final(&mut ciphertext), Ok(expected.len()));
     assert_eq!(ciphertext, expected);
-    assert_eq!(encryptor.mac(), Some(expected_mac.as_slice()));
+    assert_eq!(encryptor.mac(), Some(tag));
 
     let mut decryptor = KccmBlockCipher::<_, NB>::with_nb(decrypt_cipher);
     decryptor.init(CipherDirection::Decrypt, &params).unwrap();
@@ -58,6 +61,7 @@ where
     let mut recovered = vec![0u8; plaintext.len()];
     assert_eq!(decryptor.do_final(&mut recovered), Ok(plaintext.len()));
     assert_eq!(recovered, plaintext);
+    assert_eq!(decryptor.mac(), Some(tag));
 }
 
 #[test]

@@ -38,6 +38,10 @@ fn check_vector(
     let plaintext = decode(plaintext_hex);
     let expected_mac = decode(mac_hex);
     let expected_ciphertext = decode(ciphertext_hex);
+    // The vectors list T, the CBC-MAC before it is encrypted, as SP 800-38C and
+    // Bouncy Castle do. mac() reports the encrypted tag that ends the
+    // ciphertext instead.
+    let tag = &expected_ciphertext[expected_ciphertext.len() - expected_mac.len()..];
     let params = AeadParamsRef::new(&key, &nonce, expected_mac.len(), &aad);
 
     let mut encryptor = CcmBlockCipher::new(AesEngine::new());
@@ -49,7 +53,7 @@ fn check_vector(
         Ok(expected_ciphertext.len())
     );
     assert_eq!(ciphertext, expected_ciphertext);
-    assert_eq!(encryptor.mac(), Some(expected_mac.as_slice()));
+    assert_eq!(encryptor.mac(), Some(tag));
 
     let mut decryptor = CcmBlockCipher::new(AesEngine::new());
     decryptor.init(CipherDirection::Decrypt, &params).unwrap();
@@ -57,7 +61,7 @@ fn check_vector(
     assert_eq!(decryptor.process_bytes(&ciphertext, &mut []), Ok(0));
     assert_eq!(decryptor.do_final(&mut recovered), Ok(plaintext.len()));
     assert_eq!(recovered, plaintext);
-    assert_eq!(decryptor.mac(), Some(expected_mac.as_slice()));
+    assert_eq!(decryptor.mac(), Some(tag));
 }
 
 #[test]

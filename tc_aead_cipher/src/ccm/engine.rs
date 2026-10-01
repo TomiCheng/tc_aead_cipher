@@ -269,7 +269,7 @@ where
             let encrypted_mac = self.encrypted_mac(&raw_mac)?;
             output[message_len..message_len + self.mac_size]
                 .copy_from_slice(&encrypted_mac[..self.mac_size]);
-            self.mac = Some(raw_mac);
+            self.mac = Some(encrypted_mac);
             Ok(message_len + self.mac_size)
         })();
         data.zeroize();
@@ -299,7 +299,7 @@ where
             }
 
             output[..message_len].copy_from_slice(&plaintext);
-            self.mac = Some(raw_mac);
+            self.mac = Some(encrypted_mac);
             Ok(message_len)
         })();
         plaintext.zeroize();
