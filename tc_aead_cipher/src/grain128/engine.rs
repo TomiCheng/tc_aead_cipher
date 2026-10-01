@@ -692,6 +692,30 @@ where
 /// message starts. The `Vec` is wiped when cleared and on drop, but when it
 /// grows it frees its previous allocation without wiping it;
 /// `FixedGrain128AeadEngine` avoids the heap.
+///
+/// # Example
+///
+/// ```
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, Grain128AeadEngine};
+/// use tc_block_cipher::CipherDirection;
+///
+/// let (key, nonce) = ([0x42; 16], [0x24; 12]);
+/// let params = AeadParamsRef::new(&key, &nonce, 8, b"header");
+/// let plaintext = b"attack at dawn";
+/// let mut cipher = Grain128AeadEngine::new();
+///
+/// cipher.init(CipherDirection::Encrypt, &params)?;
+/// let mut sealed = vec![0; cipher.output_len(plaintext.len())?];
+/// let mut sealed_len = cipher.process_bytes(plaintext, &mut sealed)?;
+/// sealed_len += cipher.do_final(&mut sealed[sealed_len..])?;
+///
+/// cipher.init(CipherDirection::Decrypt, &params)?;
+/// let mut opened = vec![0; cipher.output_len(sealed_len)?];
+/// let mut opened_len = cipher.process_bytes(&sealed[..sealed_len], &mut opened)?;
+/// opened_len += cipher.do_final(&mut opened[opened_len..])?;
+/// assert_eq!(&opened[..opened_len], plaintext);
+/// # Ok::<(), Box<dyn core::error::Error>>(())
+/// ```
 #[cfg(feature = "alloc")]
 pub struct Grain128AeadEngine {
     inner: Inner<Vec<u8>>,
@@ -810,6 +834,30 @@ where
 /// updated with shifts and masks, never with branches on key, nonce or message
 /// bits, and the tag is compared in fixed time. Only public lengths decide how
 /// much work is done.
+///
+/// # Example
+///
+/// ```
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, FixedGrain128AeadEngine};
+/// use tc_block_cipher::CipherDirection;
+///
+/// let (key, nonce) = ([0x42; 16], [0x24; 12]);
+/// let params = AeadParamsRef::new(&key, &nonce, 8, b"header");
+/// let plaintext = b"attack at dawn";
+/// let mut cipher = FixedGrain128AeadEngine::<16>::new();
+///
+/// cipher.init(CipherDirection::Encrypt, &params)?;
+/// let mut sealed = vec![0; cipher.output_len(plaintext.len())?];
+/// let mut sealed_len = cipher.process_bytes(plaintext, &mut sealed)?;
+/// sealed_len += cipher.do_final(&mut sealed[sealed_len..])?;
+///
+/// cipher.init(CipherDirection::Decrypt, &params)?;
+/// let mut opened = vec![0; cipher.output_len(sealed_len)?];
+/// let mut opened_len = cipher.process_bytes(&sealed[..sealed_len], &mut opened)?;
+/// opened_len += cipher.do_final(&mut opened[opened_len..])?;
+/// assert_eq!(&opened[..opened_len], plaintext);
+/// # Ok::<(), Box<dyn core::error::Error>>(())
+/// ```
 pub struct FixedGrain128AeadEngine<const MAX_AAD_LEN: usize> {
     inner: Inner<FixedAadBuffer<MAX_AAD_LEN>>,
 }

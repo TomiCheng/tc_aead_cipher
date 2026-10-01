@@ -37,6 +37,31 @@ enum State {
 /// The buffers are `Vec`s, wiped when cleared and on drop. A `Vec` that grows,
 /// though, frees its previous allocation without wiping it, so copies of
 /// earlier bytes can remain in freed memory until it is reused.
+///
+/// # Example
+///
+/// ```
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, GcmSivBlockCipher};
+/// use tc_aes::AesEngine;
+/// use tc_block_cipher::CipherDirection;
+///
+/// let (key, nonce) = ([0x42; 16], [0x24; 12]);
+/// let params = AeadParamsRef::new(&key, &nonce, 16, b"header");
+/// let plaintext = b"attack at dawn";
+/// let mut cipher = GcmSivBlockCipher::new(AesEngine::new());
+///
+/// cipher.init(CipherDirection::Encrypt, &params)?;
+/// let mut sealed = vec![0; cipher.output_len(plaintext.len())?];
+/// let mut sealed_len = cipher.process_bytes(plaintext, &mut sealed)?;
+/// sealed_len += cipher.do_final(&mut sealed[sealed_len..])?;
+///
+/// cipher.init(CipherDirection::Decrypt, &params)?;
+/// let mut opened = vec![0; cipher.output_len(sealed_len)?];
+/// let mut opened_len = cipher.process_bytes(&sealed[..sealed_len], &mut opened)?;
+/// opened_len += cipher.do_final(&mut opened[opened_len..])?;
+/// assert_eq!(&opened[..opened_len], plaintext);
+/// # Ok::<(), Box<dyn core::error::Error>>(())
+/// ```
 pub struct GcmSivBlockCipher<C> {
     cipher: C,
     state: State,

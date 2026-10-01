@@ -1,13 +1,22 @@
 [package]
 name = "tc_aead_cipher"
-description = "Authenticated encryption with associated data (AEAD) contracts."
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Authenticated encryption (AEAD): GCM, GCM-SIV, CCM, KCCM, EAX and OCB over block ciphers, and Ascon, Grain-128AEAD and SCHWAEMM."
+readme = "README.md"
+documentation = "https://docs.rs/tc_aead_cipher"
+keywords = ["aead", "gcm", "ascon", "cryptography", "no-std"]
+categories = ["cryptography", "no-std"]
+include = ["src/**", "tests/**", "README.md", "CHANGELOG.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
+default = []
 alloc = ["tc_zeroize/alloc"]
 
 [dependencies]

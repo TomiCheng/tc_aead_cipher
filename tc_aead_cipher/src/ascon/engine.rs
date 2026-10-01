@@ -43,6 +43,30 @@ enum State {
 /// Constant time: the permutation is a bitsliced S-box and linear layer on
 /// 64-bit words, without tables or data-dependent branches, and the tag is
 /// compared in fixed time. Only public lengths decide how much work is done.
+///
+/// # Example
+///
+/// ```
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, AsconAead128Engine};
+/// use tc_block_cipher::CipherDirection;
+///
+/// let (key, nonce) = ([0x42; 16], [0x24; 16]);
+/// let params = AeadParamsRef::new(&key, &nonce, 16, b"header");
+/// let plaintext = b"attack at dawn";
+/// let mut cipher = AsconAead128Engine::new();
+///
+/// cipher.init(CipherDirection::Encrypt, &params)?;
+/// let mut sealed = vec![0; cipher.output_len(plaintext.len())?];
+/// let mut sealed_len = cipher.process_bytes(plaintext, &mut sealed)?;
+/// sealed_len += cipher.do_final(&mut sealed[sealed_len..])?;
+///
+/// cipher.init(CipherDirection::Decrypt, &params)?;
+/// let mut opened = vec![0; cipher.output_len(sealed_len)?];
+/// let mut opened_len = cipher.process_bytes(&sealed[..sealed_len], &mut opened)?;
+/// opened_len += cipher.do_final(&mut opened[opened_len..])?;
+/// assert_eq!(&opened[..opened_len], plaintext);
+/// # Ok::<(), Box<dyn core::error::Error>>(())
+/// ```
 pub struct AsconAead128Engine {
     buffer: [u8; DECRYPT_BUFFER_BYTES],
     buffer_pos: usize,
