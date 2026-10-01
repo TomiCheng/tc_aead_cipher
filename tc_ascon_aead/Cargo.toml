@@ -1,0 +1,19 @@
+[package]
+name = "tc_ascon_aead"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Ascon-AEAD128 (NIST SP 800-232) and the Ascon v1.2 AEAD variants, on the tc_aead_cipher contracts."
+readme = "README.md"
+documentation = "https://docs.rs/tc_ascon_aead"
+keywords = ["ascon", "aead", "lightweight", "cryptography", "no-std"]
+categories = ["cryptography", "no-std"]
+include = ["src/**", "tests/**", "README.md", "CHANGELOG.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[dependencies]
+tc_aead_cipher = { version = "0.1.0", path = "../tc_aead_cipher" }
+tc_block_cipher = "0.1.0"
+tc_constant_time = "0.1.0"
+tc_zeroize = "0.1.0"

@@ -1,0 +1,103 @@
+//! Common AEAD processing errors.
+
+use core::convert::Infallible;
+use core::error::Error;
+use core::fmt;
+use core::fmt::Display;
+
+/// A failure while processing or finalizing an AEAD operation; `E` is the
+/// underlying cipher's error, `Infallible` for constructions without one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AeadError<E = Infallible> {
+    /// The cipher has not been initialized.
+    NotInitialized,
+    /// Associated data was supplied after message processing started.
+    AadAfterData,
+    /// Associated data exceeds the engine's fixed buffer capacity.
+    AadTooLong {
+        /// The most associated data the engine can hold, in bytes.
+        maximum: usize,
+        /// The length the associated data would have reached, in bytes.
+        actual: usize,
+    },
+    /// The current operation has already been finalized.
+    AlreadyFinalized,
+    /// The output buffer is shorter than required.
+    OutputTooShort {
+        /// The output length the call needs, in bytes.
+        required: usize,
+        /// The length of the output buffer that was supplied, in bytes.
+        available: usize,
+    },
+    /// The ciphertext does not contain a complete authentication tag.
+    CiphertextTooShort {
+        /// The shortest valid ciphertext, the tag alone, in bytes.
+        minimum: usize,
+        /// The ciphertext length that was supplied, in bytes.
+        actual: usize,
+    },
+    /// Authentication-tag verification failed.
+    AuthenticationFailed,
+    /// The algorithm's input-length limit would be exceeded.
+    InputTooLong,
+    /// The complete packet length is not a multiple of the required block size.
+    InputNotBlockAligned {
+        /// The block size the length must be a multiple of, in bytes.
+        block_size: usize,
+        /// The length that was supplied, in bytes.
+        actual: usize,
+    },
+    /// A composed primitive failed despite validated internal invariants.
+    InternalFailure,
+    /// A failure reported by the underlying cipher.
+    Cipher(E),
+}
+
+impl<E> Display for AeadError<E> {
+    /// Writes a short description of the error; the cipher's error is reachable
+    /// through `source`. Constant time: the fields hold only public lengths.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotInitialized => f.write_str("AEAD cipher not initialized"),
+            Self::AadAfterData => {
+                f.write_str("associated data cannot be added after message processing starts")
+            }
+            Self::AadTooLong { maximum, actual } => write!(
+                f,
+                "associated data is too long: maximum {maximum} bytes, got {actual}"
+            ),
+            Self::AlreadyFinalized => f.write_str("AEAD operation already finalized"),
+            Self::OutputTooShort {
+                required,
+                available,
+            } => write!(
+                f,
+                "output buffer is too short: requires {required} bytes, has {available}"
+            ),
+            Self::CiphertextTooShort { minimum, actual } => write!(
+                f,
+                "ciphertext is too short: requires at least {minimum} bytes, has {actual}"
+            ),
+            Self::AuthenticationFailed => f.write_str("authentication tag verification failed"),
+            Self::InputTooLong => f.write_str("AEAD input length limit exceeded"),
+            Self::InputNotBlockAligned { block_size, actual } => write!(
+                f,
+                "AEAD input length must be a multiple of {block_size} bytes, got {actual}"
+            ),
+            Self::InternalFailure => f.write_str("internal AEAD primitive failure"),
+            Self::Cipher(_) => f.write_str("underlying cipher failed"),
+        }
+    }
+}
+
+impl<E: Error + 'static> Error for AeadError<E> {
+    /// Returns the underlying cipher's error for `Cipher`, and `None`
+    /// otherwise. Constant time.
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Cipher(error) => Some(error),
+            _ => None,
+        }
+    }
+}
