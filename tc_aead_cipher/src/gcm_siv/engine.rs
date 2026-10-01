@@ -391,12 +391,27 @@ impl<C> Drop for GcmSivBlockCipher<C> {
     }
 }
 
+// RFC 8452 treats the first 32 bits as a little-endian counter modulo 2^32.
+// The counter starts from the public tag, but the increment has no branch
+// either way, like GCM's.
 fn increment_counter(counter: &mut [u8; BLOCK_BYTES]) {
-    for byte in &mut counter[..4] {
-        let (value, carry) = byte.overflowing_add(1);
-        *byte = value;
-        if !carry {
-            break;
-        }
+    let value = u32::from_le_bytes(counter[..4].try_into().unwrap()).wrapping_add(1);
+    counter[..4].copy_from_slice(&value.to_le_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BLOCK_BYTES, increment_counter};
+
+    #[test]
+    fn the_counter_increments_its_first_four_bytes_little_endian_modulo_two_to_the_32() {
+        let mut counter = [0xaa_u8; BLOCK_BYTES];
+        counter[..4].copy_from_slice(&[0xff, 0xff, 0x00, 0x00]);
+        increment_counter(&mut counter);
+        assert_eq!(counter[..5], [0x00, 0x00, 0x01, 0x00, 0xaa]);
+
+        counter[..4].copy_from_slice(&[0xff; 4]);
+        increment_counter(&mut counter);
+        assert_eq!(counter[..5], [0x00, 0x00, 0x00, 0x00, 0xaa]);
     }
 }

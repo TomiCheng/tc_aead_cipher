@@ -566,11 +566,33 @@ fn double_block(input: &[u8], output: &mut [u8], reduction: u8) {
     output[last] ^= reduction & 0u8.wrapping_sub(carry);
 }
 
+// The counter starts from N', which depends on the key, so the carry is
+// propagated arithmetically through every byte instead of stopping at the
+// first byte that does not overflow.
 fn increment_be(counter: &mut [u8]) {
+    let mut carry = 1u16;
     for byte in counter.iter_mut().rev() {
-        *byte = byte.wrapping_add(1);
-        if *byte != 0 {
-            break;
+        let sum = u16::from(*byte) + carry;
+        *byte = sum as u8;
+        carry = sum >> 8;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::increment_be;
+
+    #[test]
+    fn the_counter_carries_through_every_overflowing_byte_and_wraps_at_the_top() {
+        for (input, expected) in [
+            ([0x12, 0x34, 0x56], [0x12, 0x34, 0x57]),
+            ([0x12, 0x34, 0xff], [0x12, 0x35, 0x00]),
+            ([0x12, 0xff, 0xff], [0x13, 0x00, 0x00]),
+            ([0xff, 0xff, 0xff], [0x00, 0x00, 0x00]),
+        ] {
+            let mut counter = input;
+            increment_be(&mut counter);
+            assert_eq!(counter, expected);
         }
     }
 }
