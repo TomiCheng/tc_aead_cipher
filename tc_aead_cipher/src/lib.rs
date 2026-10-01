@@ -1,9 +1,7 @@
 //! Authenticated encryption with associated data (AEAD), ported from Bouncy
-//! Castle C#: the [`AeadCipher`] and [`AeadCipherInit`] contracts and the
-//! engines that implement them.
-//!
-//! Modes over any engine that implements the `tc_block_cipher` traits, such as
-//! `tc_aes::AesEngine`:
+//! Castle C#: the [`AeadCipher`] and [`AeadCipherInit`] contracts, and the
+//! modes that build them on any engine implementing the `tc_block_cipher`
+//! traits, such as `tc_aes::AesEngine`:
 //!
 //! - [`GcmBlockCipher`] — GCM (NIST SP 800-38D).
 //! - [`EaxBlockCipher`] — EAX, over 8- or 16-byte blocks.
@@ -13,25 +11,19 @@
 //! - `KccmBlockCipher` — KCCM (DSTU 7624:2014), over 16-, 32- or 64-byte
 //!   blocks.
 //!
-//! Engines that carry their own permutation or stream cipher:
+//! Algorithms that carry their own permutation implement the same contracts
+//! in their own crates: `tc_ascon_aead`, `tc_grain128_aead` and
+//! `tc_sparkle_aead`.
 //!
-//! - [`AsconAead128Engine`] — Ascon-AEAD128 (NIST SP 800-232).
-//! - [`AsconLegacyEngine`] — Ascon-128, Ascon-128a and Ascon-80pq from
-//!   Ascon v1.2, for compatibility.
-//! - [`FixedGrain128AeadEngine`] and `Grain128AeadEngine` — Grain-128AEAD.
-//! - [`SparkleEngine`] — the SCHWAEMM family built on SPARKLE.
-//!
-//! The crate is `no_std` and needs no allocator by default. The default-off
-//! `alloc` feature adds the four modes that buffer the whole message, CCM,
-//! GCM-SIV, OCB and KCCM, the growable `Grain128AeadEngine`, and
-//! `AeadParamsOwned`, which owns and wipes its bytes. The only `unsafe` code is
-//! the SSE2 form of the SPARKLE permutation, which runs only after run-time
-//! detection on x86.
+//! The crate is `no_std`, needs no allocator by default and contains no
+//! `unsafe` code. The default-off `alloc` feature adds the four modes that
+//! buffer the whole message, CCM, GCM-SIV, OCB and KCCM, and
+//! `AeadParamsOwned`, which owns and wipes its bytes.
 //!
 //! Every engine documents its timing. The modes are constant time exactly when
-//! their block cipher is; the other engines are constant time. Lengths are
-//! public throughout. Decryption may write unauthenticated plaintext before
-//! `do_final` verifies the tag, so discard the output when `do_final` fails.
+//! their block cipher is, and lengths are public throughout. Decryption may
+//! write unauthenticated plaintext before `do_final` verifies the tag, so
+//! discard the output when `do_final` fails.
 //!
 //! # Example
 //!
@@ -59,13 +51,11 @@
 
 #![no_std]
 #![deny(missing_docs)]
-#![deny(unsafe_code)]
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-mod ascon;
 #[cfg(feature = "alloc")]
 mod ccm;
 mod eax;
@@ -73,16 +63,13 @@ mod errors;
 mod gcm;
 #[cfg(feature = "alloc")]
 mod gcm_siv;
-mod grain128;
 #[cfg(feature = "alloc")]
 mod kccm;
 #[cfg(feature = "alloc")]
 mod ocb;
 mod params;
-mod sparkle;
 mod traits;
 
-pub use ascon::{AsconAead128Engine, AsconLegacyEngine, AsconLegacyVariant};
 #[cfg(feature = "alloc")]
 pub use ccm::CcmBlockCipher;
 pub use eax::EaxBlockCipher;
@@ -90,9 +77,6 @@ pub use errors::{AeadError, AeadInitError};
 pub use gcm::GcmBlockCipher;
 #[cfg(feature = "alloc")]
 pub use gcm_siv::GcmSivBlockCipher;
-pub use grain128::FixedGrain128AeadEngine;
-#[cfg(feature = "alloc")]
-pub use grain128::Grain128AeadEngine;
 #[cfg(feature = "alloc")]
 pub use kccm::KccmBlockCipher;
 #[cfg(feature = "alloc")]
@@ -100,7 +84,6 @@ pub use ocb::OcbBlockCipher;
 #[cfg(feature = "alloc")]
 pub use params::AeadParamsOwned;
 pub use params::AeadParamsRef;
-pub use sparkle::{SparkleEngine, SparkleVariant};
 pub use traits::{
     AeadBlockCipher, AeadCipher, AeadCipherInit, InitialAadParams, MacSizeParams, NonceParams,
 };

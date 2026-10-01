@@ -1,7 +1,5 @@
-use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, AsconLegacyEngine,
-    AsconLegacyVariant,
-};
+use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef};
+use tc_ascon_aead::{AsconLegacyEngine, AsconLegacyVariant};
 use tc_block_cipher::CipherDirection;
 
 const KEY_BYTES_128: usize = 16;

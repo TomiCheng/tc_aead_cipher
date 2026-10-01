@@ -99,40 +99,8 @@ mod tests {
 fn every_public_api_and_implemented_trait_method_has_an_unambiguous_timing_doc() {
     let mut report = Vec::new();
     for (name, source) in [
-        ("ccm/engine.rs", include_str!("../src/ccm/engine.rs")),
-        ("eax/engine.rs", include_str!("../src/eax/engine.rs")),
-        (
-            "errors/aead_error.rs",
-            include_str!("../src/errors/aead_error.rs"),
-        ),
-        (
-            "errors/aead_init_error.rs",
-            include_str!("../src/errors/aead_init_error.rs"),
-        ),
-        ("gcm/engine.rs", include_str!("../src/gcm/engine.rs")),
-        (
-            "gcm_siv/engine.rs",
-            include_str!("../src/gcm_siv/engine.rs"),
-        ),
-        ("kccm/engine.rs", include_str!("../src/kccm/engine.rs")),
-        ("ocb/engine.rs", include_str!("../src/ocb/engine.rs")),
-        (
-            "params/aead_params_owned.rs",
-            include_str!("../src/params/aead_params_owned.rs"),
-        ),
-        (
-            "params/aead_params_ref.rs",
-            include_str!("../src/params/aead_params_ref.rs"),
-        ),
-        (
-            "traits/initial_aad.rs",
-            include_str!("../src/traits/initial_aad.rs"),
-        ),
-        (
-            "traits/mac_size.rs",
-            include_str!("../src/traits/mac_size.rs"),
-        ),
-        ("traits/nonce.rs", include_str!("../src/traits/nonce.rs")),
+        ("aead128.rs", include_str!("../src/aead128.rs")),
+        ("legacy.rs", include_str!("../src/legacy.rs")),
     ] {
         let (checked, missing) = missing_timing_docs(source);
         if checked == 0 {

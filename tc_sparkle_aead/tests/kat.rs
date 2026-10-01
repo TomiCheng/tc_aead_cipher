@@ -1,8 +1,6 @@
-use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, SparkleEngine,
-    SparkleVariant,
-};
+use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef};
 use tc_block_cipher::CipherDirection;
+use tc_sparkle_aead::{SparkleEngine, SparkleVariant};
 
 struct Kat {
     plaintext: &'static str,

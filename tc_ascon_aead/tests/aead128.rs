@@ -1,6 +1,5 @@
-use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, AsconAead128Engine,
-};
+use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef};
+use tc_ascon_aead::AsconAead128Engine;
 use tc_block_cipher::CipherDirection;
 
 struct Kat {

@@ -1,7 +1,6 @@
-use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadParamsRef, SparkleEngine, SparkleVariant,
-};
+use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadError, AeadParamsRef};
 use tc_block_cipher::CipherDirection;
+use tc_sparkle_aead::{SparkleEngine, SparkleVariant};
 
 #[test]
 fn reset_restores_decryption_with_initial_aad_and_blocks_encryption_reuse() {

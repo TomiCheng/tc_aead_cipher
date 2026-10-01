@@ -7,7 +7,7 @@ use core::arch::x86_64::*;
 
 use tc_runtime::intrinsics::x86::Sse2;
 
-use super::engine::{MAX_STATE_WORDS, RCON};
+use crate::engine::{MAX_STATE_WORDS, RCON};
 
 /// Applies the SPARKLE permutation to a 16-word state using SSE2.
 ///

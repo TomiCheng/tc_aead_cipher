@@ -6,8 +6,8 @@ use tc_block_cipher::{CipherDirection, KeyParams};
 use tc_constant_time::fixed_time_eq;
 use tc_zeroize::Zeroize;
 
-use super::{BYTES_256, SparkleVariant};
-use crate::{
+use crate::variant::{BYTES_256, SparkleVariant};
+use tc_aead_cipher::{
     AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
     NonceParams,
 };
@@ -55,7 +55,8 @@ enum State {
 /// # Example
 ///
 /// ```
-/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, SparkleEngine, SparkleVariant};
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef};
+/// use tc_sparkle_aead::{SparkleEngine, SparkleVariant};
 /// use tc_block_cipher::CipherDirection;
 ///
 /// let (key, nonce) = ([0x42; 16], [0x24; 16]);
@@ -430,7 +431,7 @@ impl SparkleEngine {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if state_words == MAX_STATE_WORDS {
             if let Some(sse2) = tc_runtime::intrinsics::x86::Sse2::detect() {
-                super::sse2::sparkle_opt16(&mut self.state_words, steps, sse2);
+                crate::sse2::sparkle_opt16(&mut self.state_words, steps, sse2);
                 return;
             }
         }
@@ -779,7 +780,7 @@ mod tests {
                 let mut vector = input;
 
                 sparkle_scalar(&mut scalar, MAX_STATE_WORDS, steps);
-                super::super::sse2::sparkle_opt16(&mut vector, steps, sse2);
+                crate::sse2::sparkle_opt16(&mut vector, steps, sse2);
 
                 assert_eq!(vector, scalar);
             }

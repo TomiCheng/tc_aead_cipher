@@ -5,7 +5,8 @@ holds `tc_aead_cipher`, the shared `AeadCipher` and `AeadCipherInit`
 contracts together with GCM, GCM-SIV, CCM, KCCM, EAX and OCB, which run over
 any engine that implements the
 [`tc_block_cipher`](https://crates.io/crates/tc_block_cipher) traits, and the
-Ascon, Grain-128AEAD and SCHWAEMM engines, which carry their own primitive.
+algorithms built on those contracts that carry their own primitive:
+`tc_ascon_aead`, `tc_grain128_aead` and `tc_sparkle_aead`.
 Each crate is published separately and keeps its own README, changelog, and
 validation commands.
 
@@ -17,7 +18,10 @@ validation commands.
 
 | Crate | Version | Description |
 | --- | --- | --- |
-| [`tc_aead_cipher`](tc_aead_cipher) | [![crates.io](https://img.shields.io/crates/v/tc_aead_cipher.svg)](https://crates.io/crates/tc_aead_cipher) [![docs.rs](https://docs.rs/tc_aead_cipher/badge.svg)](https://docs.rs/tc_aead_cipher) | The `AeadCipher` and `AeadCipherInit` contracts, GCM and EAX over any `tc_block_cipher` engine, and Ascon-AEAD128, Ascon v1.2, Grain-128AEAD and SCHWAEMM. A default-off `alloc` feature adds CCM, GCM-SIV, OCB and KCCM, which buffer the whole message, a growable Grain-128AEAD, and parameters that own and wipe their bytes. `no_std`; the modes are constant time exactly when their cipher is and the other engines are constant time. The only `unsafe` code is the SSE2 SPARKLE permutation, used after run-time detection on x86. |
+| [`tc_aead_cipher`](tc_aead_cipher) | [![crates.io](https://img.shields.io/crates/v/tc_aead_cipher.svg)](https://crates.io/crates/tc_aead_cipher) [![docs.rs](https://docs.rs/tc_aead_cipher/badge.svg)](https://docs.rs/tc_aead_cipher) | The `AeadCipher` and `AeadCipherInit` contracts, and GCM and EAX over any `tc_block_cipher` engine. A default-off `alloc` feature adds CCM, GCM-SIV, OCB and KCCM, which buffer the whole message, and parameters that own and wipe their bytes. `no_std`, no `unsafe`; constant time exactly when the cipher is. |
+| [`tc_ascon_aead`](tc_ascon_aead) | [![crates.io](https://img.shields.io/crates/v/tc_ascon_aead.svg)](https://crates.io/crates/tc_ascon_aead) [![docs.rs](https://docs.rs/tc_ascon_aead/badge.svg)](https://docs.rs/tc_ascon_aead) | Ascon-AEAD128 (NIST SP 800-232) and the Ascon-128, Ascon-128a and Ascon-80pq variants of Ascon v1.2. Constant time. `no_std`, no allocator, no `unsafe`, no features. |
+| [`tc_grain128_aead`](tc_grain128_aead) | [![crates.io](https://img.shields.io/crates/v/tc_grain128_aead.svg)](https://crates.io/crates/tc_grain128_aead) [![docs.rs](https://docs.rs/tc_grain128_aead/badge.svg)](https://docs.rs/tc_grain128_aead) | Grain-128AEAD, with associated data held in a fixed buffer or, with the default-off `alloc` feature, a `Vec`. Constant time. `no_std`, no `unsafe`. |
+| [`tc_sparkle_aead`](tc_sparkle_aead) | [![crates.io](https://img.shields.io/crates/v/tc_sparkle_aead.svg)](https://crates.io/crates/tc_sparkle_aead) [![docs.rs](https://docs.rs/tc_sparkle_aead/badge.svg)](https://docs.rs/tc_sparkle_aead) | The four SCHWAEMM parameter sets over the SPARKLE permutation, with an SSE2 permutation after run-time detection on x86, its only `unsafe` code. Constant time. `no_std`, no allocator, no features. |
 
 ## Requirements
 
@@ -42,8 +46,9 @@ cargo doc --locked --no-deps --all-features
 CI additionally runs these on Linux x64, i686 and ARM64, macOS ARM64, and
 Windows x64, tests the portable SPARKLE permutation on x86 hosts with SSE2
 detection disabled, checks the `wasm32-unknown-unknown` and
-`aarch64-unknown-none` targets and the crate's dependency set on each target,
-checks the build on Rust 1.85.0, and verifies the package archive. See
+`aarch64-unknown-none` targets and each crate's dependency set on each
+target, checks the build on Rust 1.85.0, and verifies the package archives.
+See
 [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## License

@@ -7,11 +7,17 @@ use tc_block_cipher::{CipherDirection, KeyParams};
 use tc_constant_time::fixed_time_eq;
 use tc_zeroize::Zeroize;
 
-use super::{KEY_BYTES, NONCE_BYTES, TAG_BYTES};
-use crate::{
+use tc_aead_cipher::{
     AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
     NonceParams,
 };
+
+/// Secret-key length in bytes.
+const KEY_BYTES: usize = 16;
+/// Nonce length in bytes.
+const NONCE_BYTES: usize = 12;
+/// Authentication-tag length in bytes.
+const TAG_BYTES: usize = 8;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum State {
@@ -696,7 +702,8 @@ where
 /// # Example
 ///
 /// ```
-/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, Grain128AeadEngine};
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef};
+/// use tc_grain128_aead::Grain128AeadEngine;
 /// use tc_block_cipher::CipherDirection;
 ///
 /// let (key, nonce) = ([0x42; 16], [0x24; 12]);
@@ -838,7 +845,8 @@ where
 /// # Example
 ///
 /// ```
-/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, FixedGrain128AeadEngine};
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef};
+/// use tc_grain128_aead::FixedGrain128AeadEngine;
 /// use tc_block_cipher::CipherDirection;
 ///
 /// let (key, nonce) = ([0x42; 16], [0x24; 12]);

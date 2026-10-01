@@ -1,14 +1,14 @@
 [package]
-name = "tc_aead_cipher"
+name = "tc_grain128_aead"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AEAD contracts and the GCM, GCM-SIV, CCM, KCCM, EAX and OCB modes over any tc_block_cipher engine."
+description = "Grain-128AEAD authenticated encryption on the tc_aead_cipher contracts."
 readme = "README.md"
-documentation = "https://docs.rs/tc_aead_cipher"
-keywords = ["aead", "gcm", "ccm", "cryptography", "no-std"]
+documentation = "https://docs.rs/tc_grain128_aead"
+keywords = ["grain", "aead", "lightweight", "cryptography", "no-std"]
 categories = ["cryptography", "no-std"]
 include = ["src/**", "tests/**", "README.md", "CHANGELOG.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
@@ -20,10 +20,7 @@ default = []
 alloc = ["tc_zeroize/alloc"]
 
 [dependencies]
+tc_aead_cipher = { version = "0.1.0", path = "../tc_aead_cipher" }
 tc_block_cipher = "0.1.0"
 tc_constant_time = "0.1.0"
 tc_zeroize = "0.1.0"
-
-[dev-dependencies]
-tc_aes = "0.1.0"
-tc_dstu7624 = "0.1.0"

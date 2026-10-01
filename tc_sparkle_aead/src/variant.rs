@@ -1,12 +1,6 @@
+//! SCHWAEMM parameter sets.
+
 use core::fmt::{Display, Formatter};
-
-mod engine;
-// The SSE2 permutation is the only code in the crate that needs `unsafe`.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[allow(unsafe_code)]
-mod sse2;
-
-pub use engine::SparkleEngine;
 
 /// SCHWAEMM parameter set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,7 +39,7 @@ impl SparkleVariant {
         self.key_bytes()
     }
 
-    const fn state_words(self) -> usize {
+    pub(crate) const fn state_words(self) -> usize {
         match self {
             Self::Schwaemm128_128 => 8,
             Self::Schwaemm256_128 | Self::Schwaemm192_192 => 12,
@@ -53,14 +47,14 @@ impl SparkleVariant {
         }
     }
 
-    const fn slim_steps(self) -> usize {
+    pub(crate) const fn slim_steps(self) -> usize {
         match self {
             Self::Schwaemm256_256 => 8,
             _ => 7,
         }
     }
 
-    const fn big_steps(self) -> usize {
+    pub(crate) const fn big_steps(self) -> usize {
         match self {
             Self::Schwaemm128_128 => 10,
             Self::Schwaemm256_128 | Self::Schwaemm192_192 => 11,

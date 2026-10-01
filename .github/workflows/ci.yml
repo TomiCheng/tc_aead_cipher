@@ -61,7 +61,7 @@ jobs:
       # SSE2 hosts otherwise never run the portable SPARKLE permutation.
       - name: Test without SSE2 detection
         if: matrix.x86
-        run: cargo test --locked --all-features --features tc_runtime/disable-x86-sse2
+        run: cargo test --locked -p tc_sparkle_aead --features tc_runtime/disable-x86-sse2
 
   x86:
     name: Native execution / Linux i686
@@ -90,9 +90,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         env:
           RUSTUP_TOOLCHAIN: 1.85.0
-      # Every dependency of the library is a tc_* crate, so Rust 1.85 covers
-      # it with and without alloc. Dev-dependencies are exempt, so tests run on
-      # stable only.
+      # Every dependency of the libraries is a tc_* crate, so Rust 1.85 covers
+      # them with and without alloc. Dev-dependencies are exempt, so tests run
+      # on stable only.
       - run: cargo +1.85.0 check --locked
       - run: cargo +1.85.0 check --locked --all-features
 
@@ -114,7 +114,9 @@ jobs:
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo doc --locked --no-deps
       - run: cargo doc --locked --no-deps --all-features
-      - run: cargo package --locked -p tc_aead_cipher
+      # Packaged together so the algorithm crates are verified against this
+      # tc_aead_cipher, not the release on crates.io.
+      - run: cargo package --locked -p tc_aead_cipher -p tc_ascon_aead -p tc_grain128_aead -p tc_sparkle_aead
         env:
           # Keep unpacked package manifests outside rust-cache's build tree.
           CARGO_TARGET_DIR: ${{ runner.temp }}/package
@@ -136,19 +138,26 @@ jobs:
       - name: Check dependency sets
         run: |
           check() {
-            expected="$1"; shift
+            # Sort the expected names the way the actual list is sorted.
+            expected="$(printf '%s\n' $1 | sort | paste -sd' ')"; shift
             actual="$(cargo tree --locked --edges normal --prefix none "$@" | cut -d' ' -f1 | sort -u | paste -sd' ')"
             if [ "$actual" != "$expected" ]; then
               echo "cargo tree $*: expected '$expected', got '$actual'" >&2
               exit 1
             fi
           }
-          # tc_runtime backs SSE2 detection for SPARKLE on x86 targets only.
+          base='tc_aead_cipher tc_block_cipher tc_constant_time'
+          for target in aarch64-unknown-none wasm32-unknown-unknown x86_64-unknown-linux-gnu i686-unknown-linux-gnu; do
+            check "$base tc_zeroize" -p tc_aead_cipher --target "$target"
+            check "$base tc_zeroize" -p tc_aead_cipher --target "$target" --features alloc
+            check "$base tc_ascon_aead tc_zeroize" -p tc_ascon_aead --target "$target"
+            check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target"
+            check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target" --features alloc
+          done
+          # tc_runtime backs SPARKLE's SSE2 detection on x86 targets only.
           for target in aarch64-unknown-none wasm32-unknown-unknown; do
-            check 'tc_aead_cipher tc_block_cipher tc_constant_time tc_zeroize' -p tc_aead_cipher --target "$target"
-            check 'tc_aead_cipher tc_block_cipher tc_constant_time tc_zeroize' -p tc_aead_cipher --target "$target" --features alloc
+            check "$base tc_sparkle_aead tc_zeroize" -p tc_sparkle_aead --target "$target"
           done
           for target in x86_64-unknown-linux-gnu i686-unknown-linux-gnu; do
-            check 'tc_aead_cipher tc_block_cipher tc_constant_time tc_runtime tc_zeroize' -p tc_aead_cipher --target "$target"
-            check 'tc_aead_cipher tc_block_cipher tc_constant_time tc_runtime tc_zeroize' -p tc_aead_cipher --target "$target" --features alloc
+            check "$base tc_runtime tc_sparkle_aead tc_zeroize" -p tc_sparkle_aead --target "$target"
           done

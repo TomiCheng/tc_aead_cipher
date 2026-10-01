@@ -1,13 +1,14 @@
 //! Incremental legacy Ascon v1.2 AEAD engine.
 
-use crate::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
-    NonceParams,
-};
 use core::fmt::{Debug, Display, Formatter};
 use tc_block_cipher::{CipherDirection, KeyParams};
 use tc_constant_time::fixed_time_eq;
 use tc_zeroize::Zeroize;
+
+use tc_aead_cipher::{
+    AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
+    NonceParams,
+};
 
 /// Legacy Ascon v1.2 AEAD variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,7 +111,8 @@ enum State {
 /// # Example
 ///
 /// ```
-/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, AsconLegacyEngine, AsconLegacyVariant};
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef};
+/// use tc_ascon_aead::{AsconLegacyEngine, AsconLegacyVariant};
 /// use tc_block_cipher::CipherDirection;
 ///
 /// let (key, nonce) = ([0x42; 16], [0x24; 16]);

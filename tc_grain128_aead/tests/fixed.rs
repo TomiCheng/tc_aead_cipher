@@ -1,7 +1,6 @@
-use tc_aead_cipher::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef, FixedGrain128AeadEngine,
-};
+use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadError, AeadInitError, AeadParamsRef};
 use tc_block_cipher::CipherDirection;
+use tc_grain128_aead::FixedGrain128AeadEngine;
 
 const KEY_BYTES: usize = 16;
 const NONCE_BYTES: usize = 12;

@@ -1,15 +1,21 @@
 //! Ascon-AEAD128 authenticated-encryption engine.
 
-use super::{KEY_BYTES, NONCE_BYTES, TAG_BYTES};
-use crate::{
-    AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
-    NonceParams,
-};
 use core::fmt::{Display, Formatter};
 use tc_block_cipher::{CipherDirection, KeyParams};
 use tc_constant_time::fixed_time_eq;
 use tc_zeroize::Zeroize;
 
+use tc_aead_cipher::{
+    AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams, MacSizeParams,
+    NonceParams,
+};
+
+/// Secret-key length in bytes.
+const KEY_BYTES: usize = 16;
+/// Nonce length in bytes.
+const NONCE_BYTES: usize = 16;
+/// Authentication-tag length in bytes.
+const TAG_BYTES: usize = 16;
 const ASCON_IV: u64 = 0x0000_1000_808c_0001;
 const RATE: usize = 16;
 const DECRYPT_BUFFER_BYTES: usize = RATE + TAG_BYTES;
@@ -47,7 +53,8 @@ enum State {
 /// # Example
 ///
 /// ```
-/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef, AsconAead128Engine};
+/// use tc_aead_cipher::{AeadCipher, AeadCipherInit, AeadParamsRef};
+/// use tc_ascon_aead::AsconAead128Engine;
 /// use tc_block_cipher::CipherDirection;
 ///
 /// let (key, nonce) = ([0x42; 16], [0x24; 16]);
@@ -646,7 +653,7 @@ fn load_u64(input: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AeadParamsRef;
+    use tc_aead_cipher::AeadParamsRef;
 
     #[test]
     fn ascon_reports_invalid_key_nonce_and_tag_sizes_as_distinct_aead_errors() {

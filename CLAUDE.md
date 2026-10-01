@@ -23,44 +23,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   so its results may use tables.
 
 The crate list and workspace-wide checks live in the root
-[README.md](README.md); read it rather than restating it here. `tc_aead_cipher`
-is `no_std` and needs no allocator by default. Its only feature, `alloc`, is
-default-off and adds CCM, GCM-SIV, OCB and KCCM, which buffer the whole
-message, the growable `Grain128AeadEngine`, and `AeadParamsOwned`. It depends
-on `tc_block_cipher`, `tc_constant_time` and `tc_zeroize`, and on x86 targets
-also on `tc_runtime`, which backs SSE2 detection for SPARKLE. CI enforces
-these dependency sets with `cargo tree` on the `wasm32-unknown-unknown`,
-`aarch64-unknown-none` and x86 targets. The modes carry no cipher: key lengths
-and timing guarantees of the block ciphers belong to their own crates, such as
-`tc_aes`.
+[README.md](README.md); read it rather than restating it here. Every crate is
+`no_std` and needs no allocator by default. `tc_aead_cipher` holds the
+`AeadCipher`, `AeadCipherInit` and `AeadBlockCipher` contracts, the parameter
+types and errors, and the modes over a block cipher; its `alloc` feature adds
+CCM, GCM-SIV, OCB and KCCM, which buffer the whole message, and
+`AeadParamsOwned`. It depends on `tc_block_cipher`, `tc_constant_time` and
+`tc_zeroize`. The modes carry no cipher: key lengths and timing guarantees of
+the block ciphers belong to their own crates, such as `tc_aes`.
+
+Algorithms that carry their own primitive live in their own crates and
+implement the core contracts rather than defining their own:
+`tc_ascon_aead` (Ascon-AEAD128 and Ascon v1.2, no features), `tc_grain128_aead`
+(Grain-128AEAD; `alloc` adds the `Vec`-backed engine) and `tc_sparkle_aead`
+(SCHWAEMM, no features). Each depends on `tc_aead_cipher`, `tc_block_cipher`,
+`tc_constant_time` and `tc_zeroize`; `tc_sparkle_aead` adds `tc_runtime` on
+x86 targets only, for SSE2 detection. CI enforces every crate's dependency set
+with `cargo tree` on the `wasm32-unknown-unknown`, `aarch64-unknown-none` and
+x86 targets. A new algorithm belongs in a new crate, not in `tc_aead_cipher`.
 
 Engines that wrap a block cipher are named `XxxBlockCipher`, as in
 `tc_block_modes`; engines that carry their own primitive are named
-`XxxEngine`, as in `tc_aes`. Every engine implements `AeadCipher` and
-`AeadCipherInit`, and the modes also `AeadBlockCipher`. Parameter types only
-carry values; each engine validates them in `init`. A failed `init` leaves the
-engine uninitialized, encryption refuses an `init` that repeats the previous
-key and nonce by comparing a key-derived value in fixed time, never a copy of
-the key, and `mac()` returns the transmitted tag. Tag sizes are in bytes.
+`XxxEngine`, as in `tc_aes`, and their crates `tc_<algorithm>_aead`. Parameter
+types only carry values; each engine validates them in `init`. A failed
+`init` leaves the engine uninitialized, and `mac()` returns the transmitted
+tag. Tag sizes are in bytes. The modes other than GCM-SIV refuse an encryption
+`init` that repeats the previous key and nonce by comparing a key-derived value
+in fixed time, never a copy of the key; the algorithm crates do not detect
+reuse.
 
 The six modes are constant time exactly when their cipher is. The Ascon,
 Grain-128AEAD and SCHWAEMM engines are constant time, the SSE2 form of SPARKLE
-included. Lengths are public. `tests/documentation.rs` requires each
-declaration it scans to say which, and matches the phrase within one line, so
-never wrap a line between "constant" or "variable" and "time". Keep the timing
-contract of each item stated in its doc comment, and disclose what cannot be
-prevented, such as a growing `Vec` freeing its old allocation unwiped. A
-failed tag check must never release plaintext from `do_final`.
+included. Lengths are public. Each crate's `tests/documentation.rs` requires
+each declaration it scans to say which, and matches the phrase within one
+line, so never wrap a line between "constant" or "variable" and "time". Keep
+the timing contract of each item stated in its doc comment, and disclose what
+cannot be prevented, such as a growing `Vec` freeing its old allocation
+unwiped. A failed tag check must never release plaintext from `do_final`.
 
-`unsafe` code is denied at the crate root and allowed only in
-`sparkle::sse2`, behind run-time detection. Keep it there.
+`unsafe` code is forbidden in every crate but `tc_sparkle_aead`, which denies
+it at the crate root and allows it only in its `sse2` module, behind run-time
+detection. Keep it there.
 
 Rust 1.85 is guaranteed for every build, since every dependency is a `tc_*`
 crate; dev-dependencies are exempt. The MSRV job therefore runs `cargo check`
 on 1.85 with and without `alloc`; tests run on stable. Stable Rust reports
-some `unsafe` blocks around SSE2 intrinsics as unused because they became safe
-in 1.87, so those helpers carry a scoped `allow(unused_unsafe)` until the MSRV
-moves. `.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
+some `unsafe` blocks around SPARKLE's SSE2 intrinsics as unused because they
+became safe in 1.87, so those helpers carry a scoped `allow(unused_unsafe)`
+until the MSRV moves. `.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
 `Cargo.lock` tracks the latest releases and stable CI tests what current
 toolchains resolve. Adding a third-party dependency to a default build or a
 first-party feature hands the 1.85 guarantee to that crate; raise it before
@@ -94,8 +104,10 @@ doctests carry the executable examples, and CI runs `cargo doc` with
 `RUSTDOCFLAGS: -D warnings`, with and without `--all-features`. Doc links to
 feature-gated items break the build without that feature, so name them in plain
 code spans. An additive public API change belongs in the crate README's
-contract lists — "Types", "Traits" and "Features" in `tc_aead_cipher/README.md`
-— and in the changelog, not only in the code.
+contract lists — "Types", "Traits" and "Features" in `tc_aead_cipher/README.md`,
+"Types" and "Features" in `tc_grain128_aead/README.md`, and "Types" in
+`tc_ascon_aead/README.md` and `tc_sparkle_aead/README.md` — and in the
+changelog, not only in the code.
 
 Work happens on `feat/*` branches off `develop`; pull requests target `develop`,
 which merges to `main`. Commit messages use an imperative subject and a wrapped

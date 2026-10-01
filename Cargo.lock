@@ -10,7 +10,6 @@ dependencies = [
  "tc_block_cipher",
  "tc_constant_time",
  "tc_dstu7624",
- "tc_runtime",
  "tc_zeroize",
 ]
 
@@ -22,6 +21,16 @@ checksum = "5c719c5aa9931f8585f573c59c38901f3b7090de11979a9b48cf587039a5ae4d"
 dependencies = [
  "tc_block_cipher",
  "tc_runtime",
+ "tc_zeroize",
+]
+
+[[package]]
+name = "tc_ascon_aead"
+version = "0.1.0"
+dependencies = [
+ "tc_aead_cipher",
+ "tc_block_cipher",
+ "tc_constant_time",
  "tc_zeroize",
 ]
 
@@ -51,10 +60,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc_grain128_aead"
+version = "0.1.0"
+dependencies = [
+ "tc_aead_cipher",
+ "tc_block_cipher",
+ "tc_constant_time",
+ "tc_zeroize",
+]
+
+[[package]]
 name = "tc_runtime"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d9f70ee51cf053b9ba11bb992cb141769d0968ac50e4f92f00e2546ca4faae3"
+
+[[package]]
+name = "tc_sparkle_aead"
+version = "0.1.0"
+dependencies = [
+ "tc_aead_cipher",
+ "tc_block_cipher",
+ "tc_constant_time",
+ "tc_runtime",
+ "tc_zeroize",
+]
 
 [[package]]
 name = "tc_zeroize"
