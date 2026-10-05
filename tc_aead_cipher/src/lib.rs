@@ -11,9 +11,9 @@
 //! - `KccmBlockCipher` — KCCM (DSTU 7624:2014), over 16-, 32- or 64-byte
 //!   blocks.
 //!
-//! Algorithms that carry their own permutation implement the same contracts
-//! in their own crates: `tc_ascon_aead`, `tc_grain128_aead` and
-//! `tc_sparkle_aead`.
+//! Algorithms that carry their own primitive implement the same contracts in
+//! their own crates: `tc_ascon_aead`, `tc_chacha_aead`, `tc_grain128_aead`
+//! and `tc_sparkle_aead`.
 //!
 //! The crate is `no_std`, needs no allocator by default and contains no
 //! `unsafe` code. The default-off `alloc` feature adds the four modes that

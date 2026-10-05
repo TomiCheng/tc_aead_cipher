@@ -11,8 +11,9 @@ Authenticated encryption with associated data (AEAD): the `AeadCipher` and
 modes over any engine that implements the
 [`tc_block_cipher`](https://crates.io/crates/tc_block_cipher) traits, such as
 [`tc_aes`](https://crates.io/crates/tc_aes). Ported from Bouncy Castle C#.
-Ascon, Grain-128AEAD and SCHWAEMM implement the same contracts in
-[`tc_ascon_aead`](https://crates.io/crates/tc_ascon_aead),
+Ascon, ChaCha20-Poly1305, Grain-128AEAD and SCHWAEMM implement the same
+contracts in [`tc_ascon_aead`](https://crates.io/crates/tc_ascon_aead),
+[`tc_chacha_aead`](https://crates.io/crates/tc_chacha_aead),
 [`tc_grain128_aead`](https://crates.io/crates/tc_grain128_aead) and
 [`tc_sparkle_aead`](https://crates.io/crates/tc_sparkle_aead).
 

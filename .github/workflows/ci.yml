@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [develop, main]
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
@@ -90,9 +88,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         env:
           RUSTUP_TOOLCHAIN: 1.85.0
-      # Every dependency of the libraries is a tc_* crate, so Rust 1.85 covers
-      # them with and without alloc. Dev-dependencies are exempt, so tests run
-      # on stable only.
+      # Every dependency of the default builds and the alloc features is a tc_*
+      # crate, so Rust 1.85 covers them. tc_chacha_aead's rustcrypto feature
+      # follows RustCrypto's minimum Rust version instead, 1.85 for the locked
+      # releases; if a release raises it, check that feature on stable only.
+      # Dev-dependencies are exempt, so tests run on stable only.
       - run: cargo +1.85.0 check --locked
       - run: cargo +1.85.0 check --locked --all-features
 
@@ -116,7 +116,7 @@ jobs:
       - run: cargo doc --locked --no-deps --all-features
       # Packaged together so the algorithm crates are verified against this
       # tc_aead_cipher, not the release on crates.io.
-      - run: cargo package --locked -p tc_aead_cipher -p tc_ascon_aead -p tc_grain128_aead -p tc_sparkle_aead
+      - run: cargo package --locked -p tc_aead_cipher -p tc_ascon_aead -p tc_chacha_aead -p tc_grain128_aead -p tc_sparkle_aead
         env:
           # Keep unpacked package manifests outside rust-cache's build tree.
           CARGO_TARGET_DIR: ${{ runner.temp }}/package
@@ -147,17 +147,24 @@ jobs:
             fi
           }
           base='tc_aead_cipher tc_block_cipher tc_constant_time'
+          chacha='tc_chacha tc_chacha_aead tc_macs tc_poly1305 tc_stream_cipher tc_zeroize'
+          # RustCrypto's chacha20 with the cipher traits it builds on.
+          rustcrypto='block-buffer cfg-if chacha20 cipher crypto-common hybrid-array inout typenum zeroize'
           for target in aarch64-unknown-none wasm32-unknown-unknown x86_64-unknown-linux-gnu i686-unknown-linux-gnu; do
             check "$base tc_zeroize" -p tc_aead_cipher --target "$target"
             check "$base tc_zeroize" -p tc_aead_cipher --target "$target" --features alloc
             check "$base tc_ascon_aead tc_zeroize" -p tc_ascon_aead --target "$target"
+            check "$base $chacha" -p tc_chacha_aead --target "$target"
             check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target"
             check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target" --features alloc
           done
-          # tc_runtime backs SPARKLE's SSE2 detection on x86 targets only.
+          # tc_runtime backs SPARKLE's SSE2 detection on x86 targets only, as
+          # cpufeatures backs chacha20's SIMD detection.
           for target in aarch64-unknown-none wasm32-unknown-unknown; do
             check "$base tc_sparkle_aead tc_zeroize" -p tc_sparkle_aead --target "$target"
+            check "$base $chacha $rustcrypto" -p tc_chacha_aead --target "$target" --features rustcrypto
           done
           for target in x86_64-unknown-linux-gnu i686-unknown-linux-gnu; do
             check "$base tc_runtime tc_sparkle_aead tc_zeroize" -p tc_sparkle_aead --target "$target"
+            check "$base $chacha $rustcrypto cpufeatures" -p tc_chacha_aead --target "$target" --features rustcrypto
           done
