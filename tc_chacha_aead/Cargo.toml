@@ -12,6 +12,13 @@ keywords = ["chacha20", "poly1305", "aead", "cryptography", "no-std"]
 categories = ["cryptography", "no-std"]
 include = ["src/**", "tests/**", "README.md", "CHANGELOG.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+rustcrypto = ["tc_chacha/rustcrypto"]
+
 [dependencies]
 tc_aead_cipher = { version = "0.1.0", path = "../tc_aead_cipher" }
 tc_block_cipher = "0.1.0"

@@ -35,17 +35,16 @@ the block ciphers belong to their own crates, such as `tc_aes`.
 Algorithms that carry their own primitive live in their own crates and
 implement the core contracts rather than defining their own:
 `tc_ascon_aead` (Ascon-AEAD128 and Ascon v1.2, no features), `tc_chacha_aead`
-(ChaCha20-Poly1305 and XChaCha20-Poly1305, no features), `tc_grain128_aead`
-(Grain-128AEAD; `alloc` adds the `Vec`-backed engine) and `tc_sparkle_aead`
-(SCHWAEMM, no features). Each depends on `tc_aead_cipher`, `tc_block_cipher`,
-`tc_constant_time` and `tc_zeroize`; `tc_sparkle_aead` adds `tc_runtime` on
-x86 targets only, for SSE2 detection, and `tc_chacha_aead` adds `tc_chacha`,
-`tc_poly1305`, `tc_macs` and `tc_stream_cipher` for its primitives. Never
-enable `tc_chacha`'s `rustcrypto` feature from a default build or a
-first-party feature: it pulls in RustCrypto's `chacha20` and `cipher`. CI
-enforces every crate's dependency set with `cargo tree` on the
-`wasm32-unknown-unknown`, `aarch64-unknown-none` and x86 targets. A new
-algorithm belongs in a new crate, not in `tc_aead_cipher`.
+(ChaCha20-Poly1305 and XChaCha20-Poly1305; `rustcrypto` moves ChaCha20 to
+RustCrypto's `chacha20`), `tc_grain128_aead` (Grain-128AEAD; `alloc` adds the
+`Vec`-backed engine) and `tc_sparkle_aead` (SCHWAEMM, no features). Each
+depends on `tc_aead_cipher`, `tc_block_cipher`, `tc_constant_time` and
+`tc_zeroize`; `tc_sparkle_aead` adds `tc_runtime` on x86 targets only, for
+SSE2 detection, and `tc_chacha_aead` adds `tc_chacha`, `tc_poly1305`,
+`tc_macs` and `tc_stream_cipher` for its primitives, and with `rustcrypto`
+RustCrypto's `chacha20` and `cipher`. CI enforces every crate's dependency set
+with `cargo tree` on the `wasm32-unknown-unknown`, `aarch64-unknown-none` and
+x86 targets. A new algorithm belongs in a new crate, not in `tc_aead_cipher`.
 
 Engines that wrap a block cipher are named `XxxBlockCipher`, as in
 `tc_block_modes`; engines that carry their own primitive are named
@@ -72,12 +71,15 @@ plaintext from `do_final`.
 it at the crate root and allows it only in its `sse2` module, behind run-time
 detection. Keep it there.
 
-Rust 1.85 is guaranteed for every build, since every dependency is a `tc_*`
-crate; dev-dependencies are exempt. The MSRV job therefore runs `cargo check`
-on 1.85 with and without `alloc`; tests run on stable. Stable Rust reports
-some `unsafe` blocks around SPARKLE's SSE2 intrinsics as unused because they
-became safe in 1.87, so those helpers carry a scoped `allow(unused_unsafe)`
-until the MSRV moves. `.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
+Rust 1.85 is guaranteed for every build but `tc_chacha_aead`'s `rustcrypto`
+feature, since every other dependency is a `tc_*` crate; dev-dependencies are
+exempt. That feature, the only one that leaves the `tc_*` crates, follows the
+minimum Rust version of `chacha20` and `cipher`, 1.85 for the locked releases;
+never enable it from a default build. The MSRV job runs `cargo check` on 1.85
+with and without `--all-features`, so it covers `rustcrypto` while RustCrypto
+stays on 1.85; tests run on stable. Stable Rust reports some `unsafe` blocks
+around SPARKLE's SSE2 intrinsics as unused because they became safe in 1.87,
+so those helpers carry a scoped `allow(unused_unsafe)` until the MSRV moves. `.cargo/config.toml` sets `incompatible-rust-versions = "allow"` so
 `Cargo.lock` tracks the latest releases and stable CI tests what current
 toolchains resolve. Adding a third-party dependency to a default build or a
 first-party feature hands the 1.85 guarantee to that crate; raise it before
@@ -112,8 +114,8 @@ doctests carry the executable examples, and CI runs `cargo doc` with
 feature-gated items break the build without that feature, so name them in plain
 code spans. An additive public API change belongs in the crate README's
 contract lists — "Types", "Traits" and "Features" in `tc_aead_cipher/README.md`,
-"Types" and "Features" in `tc_grain128_aead/README.md`, and "Types" in
-`tc_ascon_aead/README.md`, `tc_chacha_aead/README.md` and
+"Types" and "Features" in `tc_chacha_aead/README.md` and
+`tc_grain128_aead/README.md`, and "Types" in `tc_ascon_aead/README.md` and
 `tc_sparkle_aead/README.md` — and in the changelog, not only in the code.
 
 Work happens on `feat/*` branches off `develop`; pull requests target `develop`,

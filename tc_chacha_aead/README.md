@@ -15,13 +15,19 @@ MAC of [`tc_poly1305`](https://crates.io/crates/tc_poly1305). Ported from
 Bouncy Castle C#.
 
 The crate is `no_std`, needs no allocator and contains no `unsafe` code. It
-has no features and depends on `tc_aead_cipher`, `tc_block_cipher`,
-`tc_chacha`, [`tc_constant_time`](https://crates.io/crates/tc_constant_time),
+depends on `tc_aead_cipher`, `tc_block_cipher`, `tc_chacha`,
+[`tc_constant_time`](https://crates.io/crates/tc_constant_time),
 [`tc_macs`](https://crates.io/crates/tc_macs), `tc_poly1305`,
 [`tc_stream_cipher`](https://crates.io/crates/tc_stream_cipher) and
-[`tc_zeroize`](https://crates.io/crates/tc_zeroize).
+[`tc_zeroize`](https://crates.io/crates/tc_zeroize), and on RustCrypto's
+[`chacha20`](https://crates.io/crates/chacha20) and
+[`cipher`](https://crates.io/crates/cipher) only with the default-off
+`rustcrypto` feature.
 
-Requires Rust 1.85 or later (edition 2024).
+Requires Rust 1.85 or later (edition 2024) for the default build. The optional
+`rustcrypto` feature follows the minimum Rust version of the `chacha20` and
+`cipher` crates instead, which is 1.85 for `chacha20` 0.10.2 and `cipher`
+0.5.2.
 
 ## Types
 
@@ -37,6 +43,17 @@ first 16 bytes of the nonce, and runs ChaCha20-Poly1305 under it, as the XChaCha
 draft (draft-irtf-cfrg-xchacha) specifies. A message holds at most 2^32 - 1
 blocks of 64 bytes, about 256 GiB. `Display` writes `"ChaCha20-Poly1305"` or
 `"XChaCha20-Poly1305"`.
+
+## Features
+
+- `rustcrypto` (off by default) — runs ChaCha20 and HChaCha20 on RustCrypto's
+  `chacha20`, which uses SIMD where the processor has it; pulls in the
+  `chacha20` and `cipher` crates and their minimum Rust version.
+
+The feature enables `tc_chacha/rustcrypto`, so the engines produce the same
+output on either backend, and Poly1305 stays on `tc_poly1305`. An application
+that enables `tc_chacha/rustcrypto` itself gets the same backend, since Cargo
+unifies features.
 
 ## Usage
 
@@ -71,19 +88,23 @@ short to draw at random for many messages under one key; use
 XChaCha20-Poly1305 when nonces are random. Decryption may write plaintext
 before `do_final` verifies the tag; discard all of it when `do_final` fails.
 
-Both engines are constant time: ChaCha20 and HChaCha20 are built from
-additions, rotations and XORs on 32-bit words, Poly1305 reduces without
-branches, and tags are compared in fixed time. Lengths are public, and the
-result of a tag check shows in the outcome.
+Both engines are constant time on either backend: ChaCha20 and HChaCha20 are
+built from additions, rotations and XORs on 32-bit words, RustCrypto picks its
+SIMD code from public processor features, Poly1305 reduces without branches,
+and tags are compared in fixed time. Lengths are public, and the result of a
+tag check shows in the outcome. With `rustcrypto`, the `unsafe` code of the
+SIMD backends lives in `chacha20`, not in this crate.
 
 The engines wipe their key, nonce, buffer and tag on drop, and the ChaCha and
-Poly1305 engines they hold wipe their own state. Wiping does not reach the
-caller's buffers or copies left in registers and on the stack.
+Poly1305 engines they hold wipe their own state; the RustCrypto engines do so
+through the `zeroize` features of `chacha20` and `cipher`. Wiping does not
+reach the caller's buffers or copies left in registers and on the stack.
 
 ## Validation
 
 ChaCha20-Poly1305 is tested against the RFC 8439 vector and
-XChaCha20-Poly1305 against the XChaCha draft vector. Contract tests cover
+XChaCha20-Poly1305 against the XChaCha draft vector, on both backends: CI runs
+the tests with and without `--all-features`. Contract tests cover
 associated data and messages split across calls, initial associated data,
 `reset`, nonce-reuse detection, failed `init`, tampering and size errors.
 A test requires every public API to document whether it is constant or
@@ -96,7 +117,8 @@ Run these commands from the workspace root:
 
 ```text
 cargo test -p tc_chacha_aead --locked
-cargo clippy -p tc_chacha_aead --all-targets --locked -- -D warnings
+cargo test -p tc_chacha_aead --locked --features rustcrypto
+cargo clippy -p tc_chacha_aead --all-targets --locked --all-features -- -D warnings
 cargo fmt -p tc_chacha_aead --check
 cargo doc -p tc_chacha_aead --no-deps --locked
 ```

@@ -581,9 +581,15 @@ impl<C> Drop for Core<C> {
 /// nonce is too short to draw at random for many messages under one key;
 /// [`XChaCha20Poly1305Engine`] takes a 24-byte nonce for that.
 ///
-/// Constant time: ChaCha20 is built from additions, rotations and XORs on
-/// 32-bit words, Poly1305 reduces without branches, and the tag is compared
-/// in fixed time. Only public lengths decide how much work is done.
+/// ChaCha20 runs on `tc_chacha`'s portable engine, or with the `rustcrypto`
+/// feature on RustCrypto's `chacha20`, which uses SIMD where the processor
+/// has it. Both produce the same output.
+///
+/// Constant time on either backend: ChaCha20 is built from additions,
+/// rotations and XORs on 32-bit words, RustCrypto picks its SIMD code from
+/// public processor features, Poly1305 reduces without branches, and the tag
+/// is compared in fixed time. Only public lengths decide how much work is
+/// done.
 ///
 /// # Example
 ///
@@ -710,10 +716,14 @@ where
 /// an encryption `init` that repeats the previous key and nonce of the same
 /// instance.
 ///
-/// Constant time: HChaCha20 and ChaCha20 are built from additions, rotations
-/// and XORs on 32-bit words, Poly1305 reduces without branches, and the tag
-/// is compared in fixed time. Only public lengths decide how much work is
-/// done.
+/// The `rustcrypto` feature moves HChaCha20 and ChaCha20 to RustCrypto's
+/// `chacha20`, as for [`ChaCha20Poly1305Engine`].
+///
+/// Constant time on either backend: HChaCha20 and ChaCha20 are built from
+/// additions, rotations and XORs on 32-bit words, RustCrypto picks its SIMD
+/// code from public processor features, Poly1305 reduces without branches,
+/// and the tag is compared in fixed time. Only public lengths decide how much
+/// work is done.
 ///
 /// # Example
 ///

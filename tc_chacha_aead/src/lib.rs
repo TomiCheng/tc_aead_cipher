@@ -11,8 +11,15 @@
 //! Both take 32-byte keys and produce 16-byte tags. The crate is `no_std`,
 //! needs no allocator and contains no `unsafe` code.
 //!
-//! Both engines are constant time: ChaCha20 is built from additions,
-//! rotations and XORs, Poly1305 reduces without branches, and tags are
+//! ChaCha20 runs on the portable engines of `tc_chacha`. The default-off
+//! `rustcrypto` feature enables `tc_chacha/rustcrypto`, which moves it to
+//! RustCrypto's `chacha20`, with SIMD where the processor has it; the output
+//! is the same, and Poly1305 stays on `tc_poly1305`. The feature pulls in
+//! `chacha20` and `cipher` and follows their minimum Rust version.
+//!
+//! Both engines are constant time on either backend: ChaCha20 is built from
+//! additions, rotations and XORs, RustCrypto picks its SIMD code from public
+//! processor features, Poly1305 reduces without branches, and tags are
 //! compared in fixed time. Lengths are public.
 //!
 //! Decryption may write unauthenticated plaintext before `do_final`
