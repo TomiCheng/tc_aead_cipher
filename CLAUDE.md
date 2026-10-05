@@ -34,13 +34,18 @@ the block ciphers belong to their own crates, such as `tc_aes`.
 
 Algorithms that carry their own primitive live in their own crates and
 implement the core contracts rather than defining their own:
-`tc_ascon_aead` (Ascon-AEAD128 and Ascon v1.2, no features), `tc_grain128_aead`
+`tc_ascon_aead` (Ascon-AEAD128 and Ascon v1.2, no features), `tc_chacha_aead`
+(ChaCha20-Poly1305 and XChaCha20-Poly1305, no features), `tc_grain128_aead`
 (Grain-128AEAD; `alloc` adds the `Vec`-backed engine) and `tc_sparkle_aead`
 (SCHWAEMM, no features). Each depends on `tc_aead_cipher`, `tc_block_cipher`,
 `tc_constant_time` and `tc_zeroize`; `tc_sparkle_aead` adds `tc_runtime` on
-x86 targets only, for SSE2 detection. CI enforces every crate's dependency set
-with `cargo tree` on the `wasm32-unknown-unknown`, `aarch64-unknown-none` and
-x86 targets. A new algorithm belongs in a new crate, not in `tc_aead_cipher`.
+x86 targets only, for SSE2 detection, and `tc_chacha_aead` adds `tc_chacha`,
+`tc_poly1305`, `tc_macs` and `tc_stream_cipher` for its primitives. Never
+enable `tc_chacha`'s `rustcrypto` feature from a default build or a
+first-party feature: it pulls in RustCrypto's `chacha20` and `cipher`. CI
+enforces every crate's dependency set with `cargo tree` on the
+`wasm32-unknown-unknown`, `aarch64-unknown-none` and x86 targets. A new
+algorithm belongs in a new crate, not in `tc_aead_cipher`.
 
 Engines that wrap a block cipher are named `XxxBlockCipher`, as in
 `tc_block_modes`; engines that carry their own primitive are named
@@ -54,13 +59,14 @@ and the algorithm engines compare the key they already hold, also in fixed
 time. A failed `init` keeps the previous key and nonce for the check.
 
 The six modes are constant time exactly when their cipher is. The Ascon,
-Grain-128AEAD and SCHWAEMM engines are constant time, the SSE2 form of SPARKLE
-included. Lengths are public. Each crate's `tests/documentation.rs` requires
-each declaration it scans to say which, and matches the phrase within one
-line, so never wrap a line between "constant" or "variable" and "time". Keep
-the timing contract of each item stated in its doc comment, and disclose what
-cannot be prevented, such as a growing `Vec` freeing its old allocation
-unwiped. A failed tag check must never release plaintext from `do_final`.
+ChaCha20-Poly1305, Grain-128AEAD and SCHWAEMM engines are constant time, the
+SSE2 form of SPARKLE included. Lengths are public. Each crate's
+`tests/documentation.rs` requires each declaration it scans to say which, and
+matches the phrase within one line, so never wrap a line between "constant"
+or "variable" and "time". Keep the timing contract of each item stated in its
+doc comment, and disclose what cannot be prevented, such as a growing `Vec`
+freeing its old allocation unwiped. A failed tag check must never release
+plaintext from `do_final`.
 
 `unsafe` code is forbidden in every crate but `tc_sparkle_aead`, which denies
 it at the crate root and allows it only in its `sse2` module, behind run-time
@@ -107,8 +113,8 @@ feature-gated items break the build without that feature, so name them in plain
 code spans. An additive public API change belongs in the crate README's
 contract lists — "Types", "Traits" and "Features" in `tc_aead_cipher/README.md`,
 "Types" and "Features" in `tc_grain128_aead/README.md`, and "Types" in
-`tc_ascon_aead/README.md` and `tc_sparkle_aead/README.md` — and in the
-changelog, not only in the code.
+`tc_ascon_aead/README.md`, `tc_chacha_aead/README.md` and
+`tc_sparkle_aead/README.md` — and in the changelog, not only in the code.
 
 Work happens on `feat/*` branches off `develop`; pull requests target `develop`,
 which merges to `main`. Commit messages use an imperative subject and a wrapped

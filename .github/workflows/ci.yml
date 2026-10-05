@@ -116,7 +116,7 @@ jobs:
       - run: cargo doc --locked --no-deps --all-features
       # Packaged together so the algorithm crates are verified against this
       # tc_aead_cipher, not the release on crates.io.
-      - run: cargo package --locked -p tc_aead_cipher -p tc_ascon_aead -p tc_grain128_aead -p tc_sparkle_aead
+      - run: cargo package --locked -p tc_aead_cipher -p tc_ascon_aead -p tc_chacha_aead -p tc_grain128_aead -p tc_sparkle_aead
         env:
           # Keep unpacked package manifests outside rust-cache's build tree.
           CARGO_TARGET_DIR: ${{ runner.temp }}/package
@@ -151,6 +151,8 @@ jobs:
             check "$base tc_zeroize" -p tc_aead_cipher --target "$target"
             check "$base tc_zeroize" -p tc_aead_cipher --target "$target" --features alloc
             check "$base tc_ascon_aead tc_zeroize" -p tc_ascon_aead --target "$target"
+            # tc_chacha stays on its portable engines: its rustcrypto feature is off.
+            check "$base tc_chacha tc_chacha_aead tc_macs tc_poly1305 tc_stream_cipher tc_zeroize" -p tc_chacha_aead --target "$target"
             check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target"
             check "$base tc_grain128_aead tc_zeroize" -p tc_grain128_aead --target "$target" --features alloc
           done

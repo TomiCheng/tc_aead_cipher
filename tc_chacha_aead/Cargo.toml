@@ -1,0 +1,23 @@
+[package]
+name = "tc_chacha_aead"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ChaCha20-Poly1305 (RFC 8439) and XChaCha20-Poly1305 authenticated encryption, on the tc_aead_cipher contracts."
+readme = "README.md"
+documentation = "https://docs.rs/tc_chacha_aead"
+keywords = ["chacha20", "poly1305", "aead", "cryptography", "no-std"]
+categories = ["cryptography", "no-std"]
+include = ["src/**", "tests/**", "README.md", "CHANGELOG.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[dependencies]
+tc_aead_cipher = { version = "0.1.0", path = "../tc_aead_cipher" }
+tc_block_cipher = "0.1.0"
+tc_chacha = "0.1.0"
+tc_constant_time = "0.1.0"
+tc_macs = "0.1.0"
+tc_poly1305 = "0.1.0"
+tc_stream_cipher = "0.1.0"
+tc_zeroize = "0.1.0"
