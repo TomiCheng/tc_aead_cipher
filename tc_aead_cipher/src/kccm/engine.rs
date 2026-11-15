@@ -7,6 +7,7 @@ use core::fmt::{Display, Formatter};
 use tc_constant_time::fixed_time_eq;
 use tc_zeroize::Zeroize;
 
+use crate::{ParamsWithAeadOwned, ParamsWithAeadRef};
 use tc_block_cipher::{BlockCipher, BlockCipherInit, CipherDirection, KeyParams};
 
 use super::{MAX_MAC_BYTES, MIN_MAC_BYTES};
@@ -425,6 +426,28 @@ where
     /// setup and block encryption are: validation reads only public lengths,
     /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params)
+    }
+}
+
+impl<C, const NB: usize> KccmBlockCipher<C, NB>
+where
+    C: BlockCipher,
+{
+    // Starts a message from the AEAD values of `aead` with the cipher keyed by
+    // `cipher_params`: the same parameters, or the inner ones of
+    // `ParamsWithAeadRef` and `ParamsWithAeadOwned`
+    fn init_with<A, P>(
+        &mut self,
+        direction: CipherDirection,
+        aead: &A,
+        cipher_params: &P,
+    ) -> Result<(), AeadInitError<<C as BlockCipherInit<P>>::Error>>
+    where
+        C: BlockCipherInit<P>,
+        A: NonceParams + InitialAadParams + MacSizeParams + ?Sized,
+        P: ?Sized,
+    {
         self.state = State::Uninitialized;
         self.mac = None;
         self.initial_aad_len = 0;
@@ -440,13 +463,13 @@ where
                 required: 16,
             });
         }
-        let nonce = params.nonce();
+        let nonce = aead.nonce();
         if nonce.len() > block_size {
             return Err(AeadInitError::InvalidNonceLength {
                 actual: nonce.len(),
             });
         }
-        let mac_size = params.mac_size();
+        let mac_size = aead.mac_size();
         if !(MIN_MAC_BYTES..=MAX_MAC_BYTES).contains(&mac_size)
             || ![8, 16, 32, 48, 64].contains(&mac_size)
             || mac_size > block_size
@@ -457,7 +480,7 @@ where
         padded_nonce[..nonce.len()].copy_from_slice(nonce);
 
         self.cipher
-            .init(CipherDirection::Encrypt, params)
+            .init(CipherDirection::Encrypt, cipher_params)
             .map_err(AeadInitError::Cipher)?;
         // The cipher was just keyed with a supported block size, so encrypting
         // a block can fail only if the cipher breaks its own contract.
@@ -484,7 +507,7 @@ where
         self.block_size = block_size;
         self.mac_size = mac_size;
         self.nonce = padded_nonce;
-        self.aad.extend_from_slice(params.initial_aad());
+        self.aad.extend_from_slice(aead.initial_aad());
         self.initial_aad_len = self.aad.len();
         self.key_check = key_check;
         key_check.zeroize();
@@ -495,6 +518,49 @@ where
             CipherDirection::Decrypt => State::Decrypt,
         };
         Ok(())
+    }
+}
+
+impl<'a, C, P, const NB: usize> AeadCipherInit<ParamsWithAeadRef<'a, P>> for KccmBlockCipher<C, NB>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams + ?Sized,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadRef<'a, P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<C, P, const NB: usize> AeadCipherInit<ParamsWithAeadOwned<P>> for KccmBlockCipher<C, NB>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadOwned<P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
     }
 }
 

@@ -40,6 +40,9 @@ Requires Rust 1.85 or later (edition 2024).
   blocks, for messages and associated data in whole blocks.
 - `AeadParamsRef`, `AeadParamsOwned` (`alloc`) — a key, nonce, tag size and
   initial associated data, borrowed or owned and wiped on drop.
+- `ParamsWithAeadRef`, `ParamsWithAeadOwned` (`alloc`) — a cipher's own
+  parameters with a nonce, tag size and initial associated data, for ciphers
+  whose parameters are more than a key, such as RC2 with its effective key bits.
 - `AeadError`, `AeadInitError` — processing and initialization errors that
   wrap the cipher's.
 
@@ -48,6 +51,12 @@ key, nonce and tag sizes at `init`; the parameter types only carry them.
 `mac()` returns the tag that encryption appended or decryption verified, also
 for CCM and KCCM, where Bouncy Castle returns the MAC before its encryption.
 `Display` writes the cipher's name and the mode, such as `"AES/GCM"`.
+
+GCM, CCM, EAX, OCB and KCCM key their cipher with the whole parameters when
+given `AeadParamsRef` or `AeadParamsOwned`, and with the inner parameters alone
+when given `ParamsWithAeadRef` or `ParamsWithAeadOwned`, as Bouncy Castle's
+`ParametersWithIV` does for the block modes. GCM-SIV derives its message keys
+from the key bytes and takes only the former.
 
 ## Traits
 

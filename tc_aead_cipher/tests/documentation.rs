@@ -125,6 +125,14 @@ fn every_public_api_and_implemented_trait_method_has_an_unambiguous_timing_doc()
             include_str!("../src/params/aead_params_ref.rs"),
         ),
         (
+            "params/params_with_aead_owned.rs",
+            include_str!("../src/params/params_with_aead_owned.rs"),
+        ),
+        (
+            "params/params_with_aead_ref.rs",
+            include_str!("../src/params/params_with_aead_ref.rs"),
+        ),
+        (
             "traits/initial_aad.rs",
             include_str!("../src/traits/initial_aad.rs"),
         ),

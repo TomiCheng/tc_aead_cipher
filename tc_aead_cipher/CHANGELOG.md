@@ -2,6 +2,29 @@
 
 All notable changes to `tc_aead_cipher` are documented in this file.
 
+## 0.1.1 - Unreleased
+
+### Added
+
+- `ParamsWithAeadRef` and, with `alloc`, `ParamsWithAeadOwned`: a cipher's own
+  parameters with a nonce, tag size and initial associated data. GCM, CCM,
+  EAX, OCB and KCCM key their cipher with the inner parameters alone, so a
+  cipher whose parameters are more than a key, such as RC2 with its effective
+  key bits or RC5 with its rounds, runs under them. Neither implements
+  `KeyParams`, so the existing implementations over `KeyParams` never apply to
+  them. The owned form wipes its nonce and associated data on drop, and
+  `Debug` writes the inner parameters and only the lengths of the rest.
+- Tests that the new forms seal as the AEAD parameters of the same key under
+  every mode that takes them, that RC2's effective key bits and RC5's rounds
+  reach the cipher, and that nonce reuse is refused through them.
+
+### Compatibility
+
+- Purely additive. The existing `init` of each mode now runs through a private
+  helper shared with the new implementations, with the same validation order
+  and behavior. GCM-SIV and the engines of the algorithm crates do not take
+  the new forms.
+
 ## 0.1.0 - 2026-10-01
 
 Initial release.

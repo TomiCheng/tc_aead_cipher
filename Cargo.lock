@@ -93,6 +93,7 @@ dependencies = [
  "tc_block_cipher",
  "tc_constant_time",
  "tc_dstu7624",
+ "tc_rc_cipher",
  "tc_zeroize",
 ]
 
@@ -195,6 +196,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b2c81ed81cbae113b1915a9f9a4c9fd9ccdd2fb44732e0e8a3c7089b87ed6d"
 dependencies = [
  "tc_macs",
+ "tc_zeroize",
+]
+
+[[package]]
+name = "tc_rc_cipher"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd32504506783de96e4b2e40d23ed66ca46f9ace579abd16e2986c026af5d210"
+dependencies = [
+ "tc_block_cipher",
  "tc_zeroize",
 ]
 
