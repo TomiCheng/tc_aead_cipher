@@ -5,6 +5,7 @@ use crate::{
     AeadBlockCipher, AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams,
     MacSizeParams, NonceParams,
 };
+use crate::{ParamsWithAeadOwned, ParamsWithAeadRef};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
@@ -479,6 +480,28 @@ where
     /// setup and block encryption are: validation reads only public lengths,
     /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params)
+    }
+}
+
+impl<C> CcmBlockCipher<C>
+where
+    C: BlockCipher,
+{
+    // Starts a message from the AEAD values of `aead` with the cipher keyed by
+    // `cipher_params`: the same parameters, or the inner ones of
+    // `ParamsWithAeadRef` and `ParamsWithAeadOwned`
+    fn init_with<A, P>(
+        &mut self,
+        direction: CipherDirection,
+        aead: &A,
+        cipher_params: &P,
+    ) -> Result<(), AeadInitError<<C as BlockCipherInit<P>>::Error>>
+    where
+        C: BlockCipherInit<P>,
+        A: NonceParams + InitialAadParams + MacSizeParams + ?Sized,
+        P: ?Sized,
+    {
         self.state = State::Uninitialized;
         self.mac = None;
         self.initial_aad_len = 0;
@@ -491,19 +514,19 @@ where
             });
         }
 
-        let nonce = params.nonce();
+        let nonce = aead.nonce();
         if !(MIN_NONCE_BYTES..=MAX_NONCE_BYTES).contains(&nonce.len()) {
             return Err(AeadInitError::InvalidNonceLength {
                 actual: nonce.len(),
             });
         }
-        let mac_size = params.mac_size();
+        let mac_size = aead.mac_size();
         if !(MIN_MAC_BYTES..=MAX_MAC_BYTES).contains(&mac_size) || mac_size % 2 != 0 {
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
 
         self.cipher
-            .init(CipherDirection::Encrypt, params)
+            .init(CipherDirection::Encrypt, cipher_params)
             .map_err(AeadInitError::Cipher)?;
         // The cipher was just keyed with a 16-byte block size, so encrypting
         // a block can fail only if the cipher breaks its own contract.
@@ -530,13 +553,56 @@ where
         self.key_check = key_check;
         key_check.zeroize();
         self.has_key_nonce = true;
-        self.aad.extend_from_slice(params.initial_aad());
+        self.aad.extend_from_slice(aead.initial_aad());
         self.initial_aad_len = self.aad.len();
         self.state = match direction {
             CipherDirection::Encrypt => State::Encrypt,
             CipherDirection::Decrypt => State::Decrypt,
         };
         Ok(())
+    }
+}
+
+impl<'a, C, P> AeadCipherInit<ParamsWithAeadRef<'a, P>> for CcmBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams + ?Sized,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadRef<'a, P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<C, P> AeadCipherInit<ParamsWithAeadOwned<P>> for CcmBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadOwned<P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
     }
 }
 

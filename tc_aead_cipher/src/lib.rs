@@ -18,7 +18,7 @@
 //! The crate is `no_std`, needs no allocator by default and contains no
 //! `unsafe` code. The default-off `alloc` feature adds the four modes that
 //! buffer the whole message, CCM, GCM-SIV, OCB and KCCM, and
-//! `AeadParamsOwned`, which owns and wipes its bytes.
+//! `AeadParamsOwned` and `ParamsWithAeadOwned`, which own and wipe their bytes.
 //!
 //! Every engine documents its timing. The modes are constant time exactly when
 //! their block cipher is, and lengths are public throughout. Decryption may
@@ -84,6 +84,9 @@ pub use ocb::OcbBlockCipher;
 #[cfg(feature = "alloc")]
 pub use params::AeadParamsOwned;
 pub use params::AeadParamsRef;
+#[cfg(feature = "alloc")]
+pub use params::ParamsWithAeadOwned;
+pub use params::ParamsWithAeadRef;
 pub use traits::{
     AeadBlockCipher, AeadCipher, AeadCipherInit, InitialAadParams, MacSizeParams, NonceParams,
 };

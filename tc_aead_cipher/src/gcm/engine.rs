@@ -1,6 +1,9 @@
 //! GCM authenticated-encryption engine.
 
 use super::{BLOCK_BYTES, MAX_MAC_BYTES, MIN_MAC_BYTES, Multiplier};
+#[cfg(feature = "alloc")]
+use crate::ParamsWithAeadOwned;
+use crate::ParamsWithAeadRef;
 use crate::{
     AeadBlockCipher, AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams,
     MacSizeParams, NonceParams,
@@ -673,6 +676,61 @@ where
         self.init_with_parts(
             direction,
             params,
+            params.nonce(),
+            params.initial_aad(),
+            params.mac_size(),
+        )
+    }
+}
+
+impl<'a, C, P> AeadCipherInit<ParamsWithAeadRef<'a, P>> for GcmBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams + ?Sized,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadRef<'a, P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with_parts(
+            direction,
+            params.params(),
+            params.nonce(),
+            params.initial_aad(),
+            params.mac_size(),
+        )
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<C, P> AeadCipherInit<ParamsWithAeadOwned<P>> for GcmBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadOwned<P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with_parts(
+            direction,
+            params.params(),
             params.nonce(),
             params.initial_aad(),
             params.mac_size(),
