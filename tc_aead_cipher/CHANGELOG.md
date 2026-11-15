@@ -2,7 +2,7 @@
 
 All notable changes to `tc_aead_cipher` are documented in this file.
 
-## 0.1.1 - Unreleased
+## 0.1.1 - 2026-11-15
 
 ### Added
 
