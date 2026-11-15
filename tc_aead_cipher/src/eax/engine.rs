@@ -1,6 +1,9 @@
 //! EAX authenticated-encryption engine.
 
 use super::{MAX_BLOCK_BYTES, MIN_MAC_BYTES};
+#[cfg(feature = "alloc")]
+use crate::ParamsWithAeadOwned;
+use crate::ParamsWithAeadRef;
 use crate::{
     AeadBlockCipher, AeadCipher, AeadCipherInit, AeadError, AeadInitError, InitialAadParams,
     MacSizeParams, NonceParams,
@@ -548,6 +551,28 @@ where
     /// setup and block encryption are: validation reads only public lengths,
     /// and the nonce-reuse check compares a key-derived block in fixed time.
     fn init(&mut self, direction: CipherDirection, params: &P) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params)
+    }
+}
+
+impl<C> EaxBlockCipher<C>
+where
+    C: BlockCipher,
+{
+    // Starts a message from the AEAD values of `aead` with the cipher keyed by
+    // `cipher_params`: the same parameters, or the inner ones of
+    // `ParamsWithAeadRef` and `ParamsWithAeadOwned`
+    fn init_with<A, P>(
+        &mut self,
+        direction: CipherDirection,
+        aead: &A,
+        cipher_params: &P,
+    ) -> Result<(), AeadInitError<<C as BlockCipherInit<P>>::Error>>
+    where
+        C: BlockCipherInit<P>,
+        A: NonceParams + InitialAadParams + MacSizeParams + ?Sized,
+        P: ?Sized,
+    {
         self.state = State::Uninitialized;
         self.mac = None;
         let block_size = self.cipher.block_size();
@@ -557,7 +582,7 @@ where
                 required: MAX_BLOCK_BYTES,
             });
         }
-        let mac_size = params.mac_size();
+        let mac_size = aead.mac_size();
         if !(MIN_MAC_BYTES..=block_size).contains(&mac_size) {
             return Err(AeadInitError::InvalidMacSize { actual: mac_size });
         }
@@ -567,7 +592,7 @@ where
         self.k1.fill(0);
         self.k2.fill(0);
         self.cipher
-            .init(CipherDirection::Encrypt, params)
+            .init(CipherDirection::Encrypt, cipher_params)
             .map_err(AeadInitError::Cipher)?;
         // The cipher was just keyed with a supported block size, so encrypting
         // a block can fail only if the cipher breaks its own contract.
@@ -575,7 +600,7 @@ where
             .derive_subkeys()
             .map_err(|_| AeadInitError::InternalFailure)?;
         let nonce_mac = self
-            .cmac_domain(0, params.nonce())
+            .cmac_domain(0, aead.nonce())
             .map_err(|_| AeadInitError::InternalFailure)?;
 
         // Reuse means the same key and initial counter N', which is what breaks
@@ -590,7 +615,7 @@ where
 
         let mut initial_aad_state = CmacState::with_domain(self.block_size, 1);
         initial_aad_state
-            .update(&mut self.cipher, self.block_size, params.initial_aad())
+            .update(&mut self.cipher, self.block_size, aead.initial_aad())
             .map_err(|_| AeadInitError::InternalFailure)?;
         self.nonce_mac = nonce_mac;
         self.initial_aad_state = initial_aad_state;
@@ -604,6 +629,49 @@ where
             CipherDirection::Decrypt => State::Decrypt,
         };
         Ok(())
+    }
+}
+
+impl<'a, C, P> AeadCipherInit<ParamsWithAeadRef<'a, P>> for EaxBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams + ?Sized,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadRef<'a, P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<C, P> AeadCipherInit<ParamsWithAeadOwned<P>> for EaxBlockCipher<C>
+where
+    C: BlockCipher + BlockCipherInit<P>,
+    <C as BlockCipherInit<P>>::Error: 'static,
+    P: KeyParams,
+{
+    type Error = AeadInitError<<C as BlockCipherInit<P>>::Error>;
+
+    /// Keys the cipher with the inner parameters alone and starts a message
+    /// with the nonce, tag size and initial associated data, as with the
+    /// parameters over `KeyParams`. Constant time exactly when the cipher's
+    /// key setup and block encryption are, as for that `init`.
+    fn init(
+        &mut self,
+        direction: CipherDirection,
+        params: &ParamsWithAeadOwned<P>,
+    ) -> Result<(), Self::Error> {
+        self.init_with(direction, params, params.params())
     }
 }
 
